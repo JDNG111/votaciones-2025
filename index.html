@@ -4,86 +4,76 @@
   <meta charset="utf-8"/>
   <title>Elecciones COPASST 2025</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <!-- Bulma + estilos institucionales -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css"/>
+  <!-- Bootstrap 5.3 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+  <!-- Colores institucionales -->
   <style>
     :root {
       --institucional: #0033a0;
       --secundario: #f5f7fa;
     }
-    body { background-color: var(--secundario); }
-    .inst-bg { background-color: var(--institucional); }
-    .inst-title { color: var(--institucional); font-weight: 700; }
-    .inst-card { border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.1); }
-    .inst-button { background-color: var(--institucional); color: #fff; border: none; }
-    .inst-button:hover { background-color: #002a8b; color: #fff; }
-    .inst-button-outlined { border-color: var(--institucional); color: var(--institucional); }
-    .inst-button-outlined:hover { background-color: var(--institucional); color: #fff; }
-    .inst-logo { max-height: 60px; }
-    .section { padding: 3rem 1.5rem; }
+    body { background: linear-gradient(135deg, var(--institucional) 0%, var(--secundario) 100%); min-height: 100vh; }
+    .inst-card { border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; background: white; }
+    .inst-button { background: var(--institucional); color: #fff; border: none; border-radius: 50px; padding: 15px 40px; font-weight: bold; }
+    .inst-button:hover { background: #002a8b; color: #fff; }
+    .certificado-container { background: white; border: 3px solid var(--institucional); border-radius: 15px; padding: 40px; margin-top: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+    .barra-fill { height: 100%; background: linear-gradient(90deg, var(--institucional), var(--secundario)); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1); }
   </style>
 </head>
 <body>
-<section class="section">
-  <div class="container">
-    <!-- CABECERA INSTITUCIONAL -->
-    <div class="has-text-centered mb-5">
-      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Logo_UGR.svg/120px-Logo_UGR.svg.png" alt="Logo institucional" class="inst-logo">
-      <h1 class="title inst-title is-2">Elecciones COPASST 2025</h1>
-      <p class="subtitle is-5 has-text-grey">Sistema de votación institucional</p>
-    </div>
+<div class="container my-5">
+  <!-- TARJETA PRINCIPAL -->
+  <div class="card inst-card">
+    <div class="card-body text-center p-5">
+      <img src="https://raw.githubusercontent.com/JDNG111/happy_day/refs/heads/main/alcaldialogo.jpg" alt="Logo" class="mb-3" width="120">
+      <h1 class="text-primary fw-bold">Elecciones COPASST 2025</h1>
+      <p class="text-muted">Sistema de votación institucional</p>
 
-    <!-- LOGIN -->
-    <div id="loginBox" class="inst-card box has-text-centered">
-      <p class="has-text-grey mb-4">Inicia sesión con tu cuenta institucional</p>
-      <button id="loginBtn" class="button inst-button is-medium">Entrar con Google</button>
-    </div>
+      <!-- LOGIN -->
+      <div id="loginBox">
+        <button id="loginBtn" class="btn inst-button btn-lg">Entrar con Google</button>
+      </div>
 
-    <!-- NO HABILITADO -->
-    <div id="notAllowedBox" class="notification is-warning has-text-centered" style="display:none">
-      <p>Tu cuenta <b id="rejectedEmail"></b> <strong>no está habilitada</strong> para votar.</p>
-      <button class="button is-small mt-3 inst-button-outlined" onclick="signOut()">Cerrar sesión</button>
-    </div>
+      <!-- NO HABILITADO -->
+      <div id="notAllowedBox" class="alert alert-warning mt-4" style="display:none">
+        Tu cuenta <strong id="rejectedEmail"></strong> <strong>no está habilitada</strong> para votar.
+        <button class="btn btn-sm btn-outline-warning ms-2" onclick="auth.signOut()">Cerrar sesión</button>
+      </div>
 
-    <!-- VOTAR -->
-    <div id="voteBox" class="inst-card box" style="display:none">
-      <h2 class="subtitle inst-title is-4 has-text-centered">Elige a tu candidato</h2>
-      <div id="candidates" class="buttons is-centered"></div>
-    </div>
+      <!-- VOTAR -->
+      <div id="voteBox" style="display:none">
+        <h3 class="text-primary mb-4">Selecciona tu candidato</h3>
+        <div id="candidates" class="row g-3"></div>
+        <div class="text-center mt-4">
+          <button id="btnVotar" class="btn inst-button btn-lg" disabled>Confirmar mi voto</button>
+        </div>
+      </div>
 
-    <!-- ADMIN -->
-    <div id="adminBox" class="inst-card box has-text-centered" style="display:none">
-      <p class="has-text-grey mb-3">Panel de administrador</p>
-      <button id="closeBtn" class="button is-danger is-medium">Cerrar votaciones</button>
-    </div>
+      <!-- ADMIN -->
+      <div id="adminBox" class="text-center mt-4" style="display:none">
+        <hr>
+        <button id="closeBtn" class="btn btn-danger btn-lg">Cerrar votaciones</button>
+      </div>
 
-    <!-- RESULTADOS -->
-    <div id="resultBox" class="inst-card box" style="display:none">
-      <h2 class="subtitle inst-title is-4 has-text-centered">Resultados Finales</h2>
-      <div id="winner" class="notification is-success has-text-centered"></div>
-      <div id="chart" style="width:100%;height:400px"></div>
+      <!-- RESULTADOS -->
+      <div id="resultBox" style="display:none">
+        <h3 class="text-primary mb-4">Resultados Finales</h3>
+        <div id="winner" class="alert alert-success text-center fw-bold"></div>
+        <div class="grafico-container mb-4">
+          <canvas id="graficoBarras" height="120"></canvas>
+        </div>
+        <div id="certificado" class="certificado-container"></div>
+        <div class="text-center mt-3">
+          <button onclick="descargarCertificado()" class="btn inst-button btn-lg">
+            <i class="bi bi-download"></i> Descargar Certificado
+          </button>
+        </div>
+      </div>
     </div>
-  </div>
-</section>
-
-<!-- PLANTILLA CERTIFICADO -->
-<div id="cert" style="display:none;width:600px;background:#fff;border:12px solid var(--institucional);padding:40px;font-family:Arial">
-  <div style="text-align:center">
-    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Logo_UGR.svg/120px-Logo_UGR.svg.png" width="80" alt="Logo">
-    <h2 style="margin:10px 0;color:var(--institucional)">CERTIFICADO DE VOTO</h2>
-    <p>La institución certifica que:</p>
-    <h3 id="certName"></h3>
-    <p>ha emitido su voto electrónico en las elecciones 2025.</p>
-    <table style="margin:20px auto;text-align:left">
-      <tr><td><strong>Candidato seleccionado:</strong></td><td id="certCandidate"></td></tr>
-      <tr><td><strong>Fecha y hora (UTC):</strong></td><td id="certDate"></td></tr>
-      <tr><td><strong>ID único de voto:</strong></td><td id="certHash"></td></tr>
-    </table>
-    <p style="font-size:12px;color:#555">Este documento tiene validez institucional y puede ser verificado.</p>
   </div>
 </div>
 
-<!-- ========= SCRIPTS AL FINAL ========= -->
 <!-- Firebase 12.6.0 modular -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
@@ -96,8 +86,7 @@
     projectId: "votacioncopasst-48751",
     storageBucket: "votacioncopasst-48751.firebasestorage.app",
     messagingSenderId: "947307904344",
-    appId: "1:947307904344:web:eb62d753c66b816a35f92d",
-    measurementId: "G-YZ244EDSPS"
+    appId: "1:947307904344:web:eb62d753c66b816a35f92d"
   };
 
   const app      = initializeApp(firebaseConfig);
@@ -108,10 +97,10 @@
   const electionId  = 'eleccion2025';
   const electionRef = doc(db, 'elections', electionId);
 
-  // ----------- LOGIN -----------
+  // ---------- LOGIN ----------
   document.getElementById('loginBtn').onclick = () => signInWithPopup(auth, provider);
 
-  // ----------- AUTH STATE -----------
+  // ---------- AUTH STATE ----------
   onAuthStateChanged(auth, async user => {
     if (!user) { show('loginBox'); return; }
     hide('loginBox');
@@ -149,48 +138,77 @@
     drawCandidates(info.candidates);
   });
 
-  // ----------- DIBUJAR CANDIDATOS -----------
+  // ----------- CANDIDATOS -----------
   function drawCandidates(list) {
     const box = document.getElementById('candidates');
     box.innerHTML = '';
     Object.entries(list).forEach(([id, name]) => {
-      const btn = document.createElement('button');
-      btn.className = 'button is-medium inst-button';
-      btn.textContent = name;
-      btn.onclick = () => vote(id, name);
-      box.appendChild(btn);
+      const col = document.createElement('div');
+      col.className = 'col-md-4';
+      col.innerHTML =
+        `<div class="candidato-card text-center p-3" onclick="selectCandidate('${id}', '${name}', this)">
+           <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=250&background=667eea&color=fff" class="img-fluid rounded mb-2" style="height:200px;object-fit:cover;">
+           <h5 class="text-primary fw-bold">${name}</h5>
+         </div>`;
+      box.appendChild(col);
     });
+  }
+
+  let selectedId = null, selectedName = null;
+  function selectCandidate(id, name, card) {
+    document.querySelectorAll('.candidato-card').forEach(c => c.classList.remove('border', 'border-3', 'border-primary'));
+    card.classList.add('border', 'border-3', 'border-primary');
+    selectedId = id;
+    selectedName = name;
+    document.getElementById('btnVotar').disabled = false;
   }
 
   // ----------- VOTAR -----------
-  async function vote(candidateId, candidateName) {
+  document.getElementById('btnVotar').onclick = async () => {
+    if (!selectedId) return;
+    if (!confirm(`¿Confirmas tu voto por ${selectedName}?`)) return;
+
     const uid = auth.currentUser.uid;
     await setDoc(doc(db, 'elections', electionId, 'votes', uid), {
-      candidateId,
+      candidateId: selectedId,
       ts: new Date()
     });
-    await generarCertificado(candidateName);
+
+    await generarCertificado(selectedName);
     alert('¡Voto registrado! Tu certificado se ha descargado.');
     location.reload();
-  }
+  };
 
-  // ----------- CERTIFICADO PDF -----------
+  // ----------- CERTIFICADO -----------
   async function generarCertificado(candidateName) {
     const user = auth.currentUser;
     const ts   = new Date().toISOString();
     const hash = btoa(user.uid + ts).slice(-12);
-    document.getElementById('certName').textContent      = user.displayName;
-    document.getElementById('certCandidate').textContent = candidateName;
-    document.getElementById('certDate').textContent      = ts;
-    document.getElementById('certHash').textContent      = hash;
-    const cert = document.getElementById('cert');
-    cert.style.display = 'block';
-    const canvas = await html2canvas(cert, { scale: 2, backgroundColor: '#fff' });
-    cert.style.display = 'none';
+
+    const html = `
+      <div class="certificado-container">
+        <div class="text-center mb-4">
+          <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Logo_UGR.svg/120px-Logo_UGR.svg.png" width="80">
+          <h3 class="text-primary fw-bold mt-2">CERTIFICADO DE VOTO</h3>
+        </div>
+        <div class="text-center">
+          <p>La institución certifica que:</p>
+          <h4 class="text-primary fw-bold">${user.displayName}</h4>
+          <p><strong>Candidato seleccionado:</strong> ${candidateName}</p>
+          <p><strong>Fecha y hora (UTC):</strong> ${ts}</p>
+          <p><strong>ID único de voto:</strong></p>
+          <div class="codigo-verificacion">${hash}</div>
+          <p class="mt-3 mb-0" style="font-size:0.85rem;color:#666;">Este documento tiene validez institucional.</p>
+        </div>
+      </div>`;
+
+    document.getElementById('certificado').innerHTML = html;
+
+    const canvas = await html2canvas(document.getElementById('certificado'), { scale: 2, backgroundColor: '#fff' });
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('p', 'mm', 'a4');
-    const imgData   = canvas.toDataURL('image/png');
-    const imgWidth  = 180;
+    const imgData = canvas.toDataURL('image/png');
+    const imgWidth = 180;
     const imgHeight = (canvas.height * imgWidth) / canvas.width;
     pdf.addImage(imgData, 'PNG', 15, 10, imgWidth, imgHeight);
     pdf.save(`Certificado_Voto_${user.uid.slice(-6)}.pdf`);
@@ -201,7 +219,7 @@
     if (!confirm('¿Seguro de cerrar las votaciones?')) return;
     try {
       await updateDoc(electionRef, { open: false });
-      alert('Votaciones cerradas.');
+      alert('Votaciones cerradas. Recarga para ver resultados.');
       location.reload();
     } catch (e) {
       alert('Error: ' + e.message);
@@ -210,7 +228,9 @@
 
   // ----------- MOSTRAR RESULTADOS -----------
   async function showResults(data) {
-    hide('voteBox'); hide('adminBox'); show('resultBox');
+    hide('voteBox'); hide('adminBox'); hide('loginBox'); hide('notAllowedBox');
+    show('resultBox');
+
     const votesSnap = await getDocs(collection(db, 'elections', electionId, 'votes'));
     const tally = {};
     Object.keys(data.candidates).forEach(id => tally[id] = 0);
@@ -218,31 +238,65 @@
       const c = d.data().candidateId;
       tally[c] = (tally[c] || 0) + 1;
     });
+
     const sorted = Object.entries(tally).sort((a, b) => b[1] - a[1]);
     const winnerId = sorted[0][0];
     document.getElementById('winner').textContent =
       `Ganador: ${data.candidates[winnerId]} con ${sorted[0][1]} voto(s)`;
-    google.charts.load('current', { packages: ['corechart'] });
-    google.charts.setOnLoadCallback(() => {
-      const arr = [['Candidato', 'Votos']];
-      sorted.forEach(([id, n]) => arr.push([data.candidates[id], n]));
-      const dt = google.visualization.arrayToDataTable(arr);
-      new google.visualization.ColumnChart(document.getElementById('chart'))
-        .draw(dt, { title: 'Votación' });
+
+    // Gráfico de barras
+    const nombres = sorted.map(([id]) => data.candidates[id]);
+    const votos   = sorted.map(([, n]) => n);
+    new Chart(document.getElementById('graficoBarras'), {
+      type: 'bar',
+      data: {
+        labels: nombres,
+        datasets: [{ data: votos, backgroundColor: 'rgba(0, 51, 160, 0.8)', borderRadius: 8 }]
+      },
+      options: { responsive: true, scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }
+    });
+
+    // Certificado genérico de participación
+    generarCertificadoParticipacion();
+  }
+
+  function generarCertificadoParticipacion() {
+    const html = `
+      <div class="certificado-container">
+        <div class="text-center mb-4">
+          <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Logo_UGR.svg/120px-Logo_UGR.svg.png" width="80">
+          <h3 class="text-primary fw-bold mt-2">CERTIFICADO DE PARTICIPACIÓN</h3>
+        </div>
+        <div class="text-center">
+          <p>La institución certifica que el proceso electoral ha finalizado exitosamente.</p>
+          <p><strong>Fecha y hora (UTC):</strong> ${new Date().toISOString()}</p>
+          <p class="mt-3 mb-0" style="font-size:0.85rem;color:#666;">Documento generado automáticamente.</p>
+        </div>
+      </div>`;
+    document.getElementById('certificado').innerHTML = html;
+  }
+
+  function descargarCertificado() {
+    const cert = document.getElementById('certificado');
+    html2canvas(cert, { scale: 2, backgroundColor: '#fff' }).then(canvas => {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = 180;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 15, 10, imgWidth, imgHeight);
+      pdf.save('Certificado_Votacion_COPASST2025.pdf');
     });
   }
 
-  // ----------- HELPERS (CORREGIDOS) -----------
+  // ----------- HELPERS -----------
   function show(id) { document.getElementById(id).style.display = 'block'; }
   function hide(id) { document.getElementById(id).style.display = 'none'; }
-
-  // ----------- CERRAR SESIÓN ----------
-  window.signOut = () => auth.signOut();
 </script>
 
 <!-- Librerías auxiliares -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://www.gstatic.com/charts/loader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </body>
 </html>
