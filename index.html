@@ -223,9 +223,9 @@
         return;
       }
 
-      // 4. ¿Ya votó?
+      // 4. ¿Ya votó? - Verificar con permisos adecuados
+      const emailSanitized = user.email.replace(/[@.]/g, '_');
       try {
-        const emailSanitized = user.email.replace(/[@.]/g, '_');
         const votoSnap = await getDoc(doc(db, 'elections', electionId, 'votes', emailSanitized));
         if (votoSnap.exists()) {
           votoGuardado = votoSnap.data();
@@ -233,7 +233,24 @@
           return;
         }
       } catch (error) {
-        console.log('No se pudo verificar voto previo (esperado si no existe):', error);
+        // Si hay error de permisos, intentar verificar listando todos los votos
+        console.log('Verificación directa falló, intentando método alternativo...');
+        try {
+          const allVotesSnap = await getDocs(collection(db, 'elections', electionId, 'votes'));
+          let yaVoto = false;
+          allVotesSnap.forEach(doc => {
+            if (doc.id === emailSanitized) {
+              yaVoto = true;
+              votoGuardado = doc.data();
+            }
+          });
+          if (yaVoto) {
+            mostrarYaVoto(votoGuardado);
+            return;
+          }
+        } catch (error2) {
+          console.log('Error en verificación alternativa:', error2);
+        }
       }
 
       // 5. Mostrar candidatos
