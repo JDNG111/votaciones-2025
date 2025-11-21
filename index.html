@@ -35,7 +35,7 @@
 <div class="container my-5">
   <div class="card inst-card">
     <div class="card-body text-center p-5">
-      <img src="https://raw.githubusercontent.com/JDNG111/happy_day/refs/heads/main/alcaldialogo.jpg" alt="Logo" class="mb-3" width="120">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Logo_UGR.svg/120px-Logo_UGR.svg.png" alt="Logo" class="mb-3" width="120">
       <h1 class="text-primary fw-bold">Elecciones COPASST 2025</h1>
       <p class="text-muted">Sistema de votación institucional</p>
 
@@ -332,6 +332,11 @@
     hide('resultBox');
     show('yaVotoBox');
 
+    // Asegurar que usamos los campos correctos (con o sin mayúsculas)
+    const email = voto.Email || voto.email || 'No disponible';
+    const fecha = voto.Fecha || voto.fecha || 'No disponible';
+    const codigo = voto.Codigo_Verificacion || voto.codigoVerificacion || 'No disponible';
+
     const html = `
       <div class="certificado-container" id="certificado">
         <div class="text-center mb-4">
@@ -341,12 +346,12 @@
         </div>
         <div class="text-center">
           <p>Se certifica que:</p>
-          <h4 class="text-primary fw-bold">${voto.Email}</h4>
+          <h4 class="text-primary fw-bold">${email}</h4>
           <p>Ha ejercido su derecho al voto</p>
-          <p><strong>Fecha:</strong> ${voto.Fecha}</p>
+          <p><strong>Fecha:</strong> ${fecha}</p>
           <div style="margin-top: 30px;">
             <p><strong>Código de verificación:</strong></p>
-            <div class="codigo-verificacion">${voto.Codigo_Verificacion}</div>
+            <div class="codigo-verificacion">${codigo}</div>
           </div>
           <p class="mt-4 mb-0" style="font-size:0.85rem;color:#666;">
             Este documento tiene validez institucional.
