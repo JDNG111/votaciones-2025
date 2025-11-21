@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <title>Elecciones COPASST 2025 – Lista blanca</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css"/>
+  <!-- Firebase 12.6.0 modular -->
+  <script type="module">
+    // ----------- CONFIG REAL -----------
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+    import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, collection, addDoc, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDpbdE3QYBpvYbDmrYO8PjFH3rMJkinmwE",
+      authDomain: "votacioncopasst-48751.firebaseapp.com",
+      projectId: "votacioncopasst-48751",
+      storageBucket: "votacioncopasst-48751.firebasestorage.app",
+      messagingSenderId: "947307904344",
+      appId: "1:947307904344:web:eb62d753c66b816a35f92d",
+      measurementId: "G-YZ244EDSPS"
+    };
+
+    const app       = initializeApp(firebaseConfig);
+    const auth      = getAuth(app);
+    const db        = getFirestore(app);
+    const provider  = new GoogleAuthProvider();
+
+    // ----------- GLOBALES -----------
+    const electionId = 'eleccion2025';
+    const electionRef = doc(db, 'elections', electionId);
+
+    // ----------- ELEMENTOS -----------
+    const loginBox      = document.getElementById('loginBox');
+    const notAllowedBox = document.getElementById('notAllowedBox');
+    const voteBox       = document.getElementById('voteBox');
+    const adminBox      = document.getElementById('adminBox');
+    const resultBox     = document.getElementById('resultBox');
+    const rejectedEmail = document.getElementById('rejectedEmail');
+
+    // ----------- LOGIN -----------
+    document.getElementById('loginBtn').onclick = () => signInWithPopup(auth, provider);
+
+    // ----------- AUTH STATE -----------
+    onAuthStateChanged(auth, async user => {
+      if (!user) { show(loginBox); return; }
+      hide(loginBox);
+
+      // Crear elección si no existe (solo admin)
+      const snap = await getDoc(electionRef);
+      if (!snap.exists()) {
+        if (user.email === 'alvaro.velez@cali.gov.co') {
+          await setDoc(electionRef, {
+            open: true,
+            candidates: {
+              cand1: 'Candidato 1',
+              cand2: 'Candidato 2',
+              cand3: 'Candidato 3'
+            },
+            adminUID: user.uid,
+            votersList: [],
+            createdAt: new Date()
+          });
+          alert('Elección creada. Carga la lista de votantes desde la consola.');
+        } else {
+          alert('La elección aún no ha sido creada por el administrador.');
+          return;
+        }
+      }
+
+      const info = snap.data();
+      // Verificar lista blanca
+      if (!info.votersList.includes(user.email)) {
+        show(notAllowedBox);
+        rejectedEmail.textContent = user.email;
+        return;
+      }
+
+      if (!info.open) { showResults(info); return; }
+      show(voteBox);
+      if (user.email === 'alvaro.velez@cali.gov.co') show(adminBox);
+      drawCandidates(info.candidates);
+    });
+
+    // ----------- DIBUJAR CANDIDATOS -----------
+    function drawCandidates(list) {
+      const box = document.getElementById('candidates');
+      box.innerHTML = '';
+      Object.entries(list).forEach(([id, name]) => {
+        const btn = document.createElement('button');
+        btn.className = 'button is-medium is-fullwidth';
+        btn.textContent = name;
+        btn.onclick = () => vote(id, name);
+        box.appendChild(btn);
+      });
+    }
+
+    // ----------- VOTAR -----------
+    async function vote(candidateId, candidateName) {
+      const uid = auth.currentUser.uid;
+      await setDoc(doc(db, 'elections', electionId, 'votes', uid), {
+        candidateId,
+        ts: new Date()
+      });
+      await generarCertificado(candidateName);
+      alert('¡Voto registrado! Tu certificado se ha descargado.');
+      location.reload();
+    }
+
+    // ----------- CERTIFICADO PDF -----------
+    async function generarCertificado(candidateName) {
+      const user = auth.currentUser;
+      const ts   = new Date().toISOString();
+      const hash = btoa(user.uid + ts).slice(-12);
+      document.getElementById('certName').textContent      = user.displayName;
+      document.getElementById('certCandidate').textContent = candidateName;
+      document.getElementById('certDate').textContent      = ts;
+      document.getElementById('certHash').textContent      = hash;
+      const cert = document.getElementById('cert');
+      cert.style.display = 'block';
+      const canvas = await html2canvas(cert, { scale: 2, backgroundColor: '#fff' });
+      cert.style.display = 'none';
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgData   = canvas.toDataURL('image/png');
+      const imgWidth  = 180;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      pdf.addImage(imgData, 'PNG', 15, 10, imgWidth, imgHeight);
+      pdf.save(`Certificado_Voto_${user.uid.slice(-6)}.pdf`);
+    }
+
+    // ----------- CERRAR VOTACIONES -----------
+    document.getElementById('closeBtn').onclick = async () => {
+      if (!confirm('¿Seguro de cerrar las votaciones?')) return;
+      try {
+        await updateDoc(electionRef, { open: false });
+        alert('Votaciones cerradas.');
+        location.reload();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    };
+
+    // ----------- MOSTRAR RESULTADOS -----------
+    async function showResults(data) {
+      hide(voteBox); hide(adminBox); show(resultBox);
+      const votesSnap = await getDocs(collection(db, 'elections', electionId, 'votes'));
+      const tally = {};
+      Object.keys(data.candidates).forEach(id => tally[id] = 0);
+      votesSnap.forEach(d => {
+        const c = d.data().candidateId;
+        tally[c] = (tally[c] || 0) + 1;
+      });
+      const sorted = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+      const winnerId = sorted[0][0];
+      document.getElementById('winner').textContent =
+        `Ganador: ${data.candidates[winnerId]} con ${sorted[0][1]} voto(s)`;
+      google.charts.load('current', { packages: ['corechart'] });
+      google.charts.setOnLoadCallback(() => {
+        const arr = [['Candidato', 'Votos']];
+        sorted.forEach(([id, n]) => arr.push([data.candidates[id], n]));
+        const dt = google.visualization.arrayToDataTable(arr);
+        new google.visualization.ColumnChart(document.getElementById('chart'))
+          .draw(dt, { title: 'Votación' });
+      });
+    }
+
+    // ----------- HELPERS -----------
+    function show(el) { el.style.display = 'block'; }
+    function hide(el) { el.style.display = 'none'; }
+
+    // ----------- CERRAR SESIÓN (opción en no habilitado) ----------
+    window.signOut = () => auth.signOut();
+  </script>
+</body>
+</html>
