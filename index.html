@@ -155,13 +155,18 @@
   }
 
   let selectedId = null, selectedName = null;
-  function selectCandidate(id, name, card) {
-    document.querySelectorAll('.candidato-card').forEach(c => c.classList.remove('border', 'border-3', 'border-primary'));
-    card.classList.add('border', 'border-3', 'border-primary');
-    selectedId = id;
-    selectedName = name;
-    document.getElementById('btnVotar').disabled = false;
-  }
+function selectCandidate(id, name, card) {
+  document.querySelectorAll('.candidato-card').forEach(c => c.classList.remove('border', 'border-3', 'border-primary'));
+  card.classList.add('border', 'border-3', 'border-primary');
+  selectedId = id;
+  selectedName = name;
+  document.getElementById('btnVotar').disabled = false;
+}
+
+// ⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅⬅
+// EXPONEMOS LAS FUNCIONES AL GLOBAL
+window.selectCandidate = selectCandidate;
+window.descargarCertificado = descargarCertificado;
 
   // ----------- VOTAR -----------
   document.getElementById('btnVotar').onclick = async () => {
