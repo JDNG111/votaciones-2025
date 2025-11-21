@@ -119,8 +119,17 @@
         <div class="alert alert-warning">
           <i class="bi bi-shield-lock-fill"></i> <strong>Panel de Administrador</strong>
         </div>
-        <button id="closeBtn" class="btn btn-danger btn-lg">
-          <i class="bi bi-lock-fill"></i> Cerrar votaciones
+        <div class="btn-group mb-3" role="group">
+          <button id="closeBtn" class="btn btn-danger btn-lg">
+            <i class="bi bi-lock-fill"></i> Cerrar votaciones
+          </button>
+          <button id="openBtn" class="btn btn-success btn-lg">
+            <i class="bi bi-unlock-fill"></i> Abrir votaciones
+          </button>
+        </div>
+        <br>
+        <button id="resetBtn" class="btn btn-warning btn-lg mt-2">
+          <i class="bi bi-arrow-clockwise"></i> Resetear todos los votos
         </button>
       </div>
     </div>
@@ -131,7 +140,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
   import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
-  import { getFirestore, doc, getDoc, setDoc, collection, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+  import { getFirestore, doc, getDoc, setDoc, collection, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDpbdE3QYBpvYbDmrYO8PjFH3rMJkinmwE",
@@ -250,8 +259,7 @@
         `<div class="candidato-card" data-id="${id}" data-name="${name}">
            <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=250&background=667eea&color=fff" class="img-fluid" style="height:200px;object-fit:cover;width:100%;">
            <div class="p-3 text-center">
-             <h5 class="text-primary fw-bold">${id}</h5>
-             <p class="mb-0">${name}</p>
+             <h5 class="text-primary fw-bold mb-0">${name}</h5>
            </div>
          </div>`;
       box.appendChild(col);
@@ -386,6 +394,55 @@
       alert('Error: ' + e.message);
       btn.disabled = false;
       btn.innerHTML = '<i class="bi bi-lock-fill"></i> Cerrar votaciones';
+    }
+  };
+
+  // ----------- ABRIR VOTACIONES -----------
+  document.getElementById('openBtn').onclick = async () => {
+    if (!confirm('¿Seguro de abrir las votaciones?')) return;
+    
+    const btn = document.getElementById('openBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Abriendo...';
+    
+    try {
+      await updateDoc(electionRef, { open: true });
+      alert('Votaciones abiertas exitosamente. Recargando...');
+      location.reload();
+    } catch (e) {
+      alert('Error: ' + e.message);
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-unlock-fill"></i> Abrir votaciones';
+    }
+  };
+
+  // ----------- RESETEAR VOTOS -----------
+  document.getElementById('resetBtn').onclick = async () => {
+    const confirmacion = prompt('⚠️ ADVERTENCIA: Esto eliminará TODOS los votos.\n\nEscribe "RESETEAR" para confirmar:');
+    if (confirmacion !== 'RESETEAR') {
+      alert('Operación cancelada');
+      return;
+    }
+    
+    const btn = document.getElementById('resetBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Eliminando votos...';
+    
+    try {
+      const votesSnap = await getDocs(collection(db, 'elections', electionId, 'votes'));
+      let deleteCount = 0;
+      
+      for (const votoDoc of votesSnap.docs) {
+        await votoDoc.ref.delete();
+        deleteCount++;
+      }
+      
+      alert(`✅ Se eliminaron ${deleteCount} votos exitosamente. Recargando...`);
+      location.reload();
+    } catch (e) {
+      alert('Error al resetear votos: ' + e.message);
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Resetear todos los votos';
     }
   };
 
