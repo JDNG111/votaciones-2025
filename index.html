@@ -9,10 +9,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
   <!-- Estilos institucionales -->
   <style>
-    :root {
-      --institucional: #0033a0;
-      --secundario: #f5f7fa;
-    }
+    :root { --institucional: #0033a0; --secundario: #f5f7fa; }
     body { background: linear-gradient(135deg, var(--institucional) 0%, var(--secundario) 100%); min-height: 100vh; }
     .inst-card { border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; background: white; }
     .inst-button { background: var(--institucional); color: #fff; border: none; border-radius: 50px; padding: 15px 40px; font-weight: bold; }
@@ -40,6 +37,21 @@
         <button class="btn btn-sm btn-outline-warning ms-2" onclick="auth.signOut()">Cerrar sesión</button>
       </div>
 
+      <!-- YA VOTÓ -->
+      <div id="yaVotoBox" class="text-center" style="display:none">
+        <div class="alert alert-info">
+          <i class="bi bi-check-circle-fill fs-1"></i>
+          <h3 class="mt-3">¡Ya votaste!</h3>
+          <p class="mb-0">Tu voto fue registrado de forma segura.</p>
+        </div>
+        <div id="certificado" class="certificado-container"></div>
+        <div class="text-center mt-3">
+          <button onclick="descargarCertificado()" class="btn inst-button btn-lg">
+            <i class="bi bi-download"></i> Descargar certificado en PDF
+          </button>
+        </div>
+      </div>
+
       <!-- VOTAR -->
       <div id="voteBox" style="display:none">
         <h3 class="text-primary mb-4">Selecciona tu candidato</h3>
@@ -53,21 +65,6 @@
       <div id="adminBox" class="text-center mt-4" style="display:none">
         <hr>
         <button id="closeBtn" class="btn btn-danger btn-lg">Cerrar votaciones</button>
-      </div>
-
-      <!-- RESULTADOS -->
-      <div id="resultBox" style="display:none">
-        <h3 class="text-primary mb-4">Resultados Finales</h3>
-        <div id="winner" class="alert alert-success text-center fw-bold"></div>
-        <div class="grafico-container mb-4">
-          <canvas id="graficoBarras" height="120"></canvas>
-        </div>
-        <div id="certificado" class="certificado-container"></div>
-        <div class="text-center mt-3">
-          <button onclick="descargarCertificado()" class="btn inst-button btn-lg">
-            <i class="bi bi-download"></i> Descargar Certificado
-          </button>
-        </div>
       </div>
     </div>
   </div>
@@ -104,15 +101,16 @@
     if (!user) { show('loginBox'); return; }
     hide('loginBox');
 
+    // 1. Crear elección si no existe (solo admin)
     const snap = await getDoc(electionRef);
     if (!snap.exists()) {
       if (user.email === 'alvaro.velez@cali.gov.co') {
         await setDoc(electionRef, {
           open: true,
           candidates: {
-            cand1: 'Candidato 1',
-            cand2: 'Candidato 2',
-            cand3: 'Candidato 3'
+            cand1: 'Ana María Pérez',
+            cand2: 'Carlos Andrés Ramírez',
+            cand3: 'Laura Victoria Gómez'
           },
           adminUID: user.uid,
           votersList: [],
@@ -125,13 +123,28 @@
     }
 
     const info = snap.data();
+
+    // 2. ¿Está habilitado?
     if (!info.votersList.includes(user.email)) {
       show('notAllowedBox');
       document.getElementById('rejectedEmail').textContent = user.email;
       return;
     }
-    if (!info.open) { showResults(info); return; }
 
+    // 3. ¿Ya votó?
+    const votoSnap = await getDoc(doc(db, 'elections', electionId, 'votes', user.uid));
+    if (votoSnap.exists()) {
+      mostrarYaVoto(votoSnap.data());
+      return;
+    }
+
+    // 4. ¿Votaciones abiertas?
+    if (!info.open) {
+      showResults(info);
+      return;
+    }
+
+    // 5. Mostrar candidatos
     show('voteBox');
     if (user.email === 'alvaro.velez@cali.gov.co') show('adminBox');
     drawCandidates(info.candidates);
@@ -180,16 +193,18 @@
       codigoVerificacion: codigo
     });
 
-    // 2. Certificado (sin mencionar candidato)
-    await generarCertificado(fecha, codigo);
+    // 2. Mostrar pantalla "Ya votaste" + certificado
+    mostrarYaVoto({ email: user.email, fecha: fecha, codigoVerificacion: codigo });
 
-    alert('¡Voto registrado! Tu certificado se ha descargado.');
-    location.reload();
+    // 3. Descarga automática del certificado
+    await generarCertificado(fecha, codigo);
   };
 
-  // ----------- CERTIFICADO (sin candidato) -----------
-  async function generarCertificado(fecha, codigo) {
-    const user = auth.currentUser;
+  // ----------- MOSTRAR "YA VOTÓ" + CERTIFICADO -----------
+  function mostrarYaVoto(voto) {
+    hide('voteBox'); hide('adminBox'); hide('loginBox'); hide('notAllowedBox');
+    show('yaVotoBox');
+
     const html = `
       <div class="certificado-container">
         <div class="text-center mb-4">
@@ -198,25 +213,16 @@
         </div>
         <div class="text-center">
           <p>La institución certifica que:</p>
-          <h4 class="text-primary fw-bold">${user.displayName}</h4>
-          <p><strong>Fecha y hora:</strong> ${fecha}</p>
+          <h4 class="text-primary fw-bold">${voto.email}</h4>
+          <p><strong>Fecha y hora:</strong> ${voto.fecha}</p>
           <div style="margin-top: 30px;">
             <p><strong>Código de verificación:</strong></p>
-            <div class="codigo-verificacion">${codigo}</div>
+            <div class="codigo-verificacion">${voto.codigoVerificacion}</div>
           </div>
           <p class="mt-3 mb-0" style="font-size:0.85rem;color:#666;">Este documento tiene validez institucional.</p>
         </div>
       </div>`;
-
     document.getElementById('certificado').innerHTML = html;
-
-    const canvas = await html2canvas(document.getElementById('certificado'), { scale: 2, backgroundColor: '#fff' });
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const imgData = canvas.toDataURL('image/png');
-    const imgWidth = 180;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    pdf.addImage(imgData, 'PNG', 15, 10, imgWidth, imgHeight);
-    pdf.save(`Certificado_Voto_${user.uid.slice(-6)}.pdf`);
   }
 
   // ----------- CERRAR VOTACIONES -----------
@@ -233,7 +239,7 @@
 
   // ----------- MOSTRAR RESULTADOS -----------
   async function showResults(data) {
-    hide('voteBox'); hide('adminBox'); hide('loginBox'); hide('notAllowedBox');
+    hide('voteBox'); hide('adminBox'); hide('loginBox'); hide('notAllowedBox'); hide('yaVotoBox');
     show('resultBox');
 
     const votesSnap = await getDocs(collection(db, 'elections', electionId, 'votes'));
@@ -297,7 +303,7 @@
   function show(id) { document.getElementById(id).style.display = 'block'; }
   function hide(id) { document.getElementById(id).style.display = 'none'; }
 
-  // ----------- EXPONER FUNCIONES AL GLOBAL (para onclick) -----------
+  // ----------- EXPONER FUNCIONES AL GLOBAL -----------
   window.selectCandidate = selectCandidate;
   window.descargarCertificado = descargarCertificado;
 </script>
