@@ -160,6 +160,7 @@
   const electionRef = doc(db, 'elections', electionId);
 
   let votoGuardado = null;
+  let voterData = null; // Datos del votante (nombre, cédula)
 
   // ---------- LOGIN ----------
   document.getElementById('loginBtn').onclick = () => signInWithPopup(auth, provider);
@@ -191,13 +192,6 @@
               'Candidato 3': 'Laura Victoria Gómez'
             },
             adminUID: user.uid,
-            votersList: [
-              'e.iet.julian.navarro@cali.edu.co',
-              'jose.zamora@cali.gov.co',
-              'luz.fernandez@cali.gov.co',
-              'elidier.gomez@cali.gov.co',
-              'alvaro.velez@cali.gov.co'
-            ],
             createdAt: new Date()
           });
           location.reload();
@@ -216,36 +210,45 @@
         return;
       }
 
-      // 3. ¿Está habilitado?
-      if (!info.votersList.includes(user.email)) {
+      // 3. Verificar si está habilitado (existe en voters)
+      const emailSanitized = user.email.replace(/[@.]/g, '_');
+      try {
+        const voterSnap = await getDoc(doc(db, 'elections', electionId, 'voters', emailSanitized));
+        if (!voterSnap.exists()) {
+          show('notAllowedBox');
+          document.getElementById('rejectedEmail').textContent = user.email;
+          return;
+        }
+        // Guardar datos del votante
+        voterData = voterSnap.data();
+      } catch (error) {
+        console.error('Error al verificar votante:', error);
         show('notAllowedBox');
         document.getElementById('rejectedEmail').textContent = user.email;
         return;
       }
 
-      // 4. ¿Ya votó? - Verificar con permisos adecuados
-      const emailSanitized = user.email.replace(/[@.]/g, '_');
+      // 4. ¿Ya votó?
       try {
         const votoSnap = await getDoc(doc(db, 'elections', electionId, 'votes', emailSanitized));
         if (votoSnap.exists()) {
           votoGuardado = votoSnap.data();
-          mostrarYaVoto(votoGuardado);
+          await mostrarYaVoto(votoGuardado, user.email);
           return;
         }
       } catch (error) {
-        // Si hay error de permisos, intentar verificar listando todos los votos
         console.log('Verificación directa falló, intentando método alternativo...');
         try {
           const allVotesSnap = await getDocs(collection(db, 'elections', electionId, 'votes'));
           let yaVoto = false;
-          allVotesSnap.forEach(doc => {
-            if (doc.id === emailSanitized) {
+          allVotesSnap.forEach(docSnap => {
+            if (docSnap.id === emailSanitized) {
               yaVoto = true;
-              votoGuardado = doc.data();
+              votoGuardado = docSnap.data();
             }
           });
           if (yaVoto) {
-            mostrarYaVoto(votoGuardado);
+            await mostrarYaVoto(votoGuardado, user.email);
             return;
           }
         } catch (error2) {
@@ -303,10 +306,9 @@
     if (!confirm(`¿Confirmas tu voto por ${selectedName}?\n\nEsta acción NO se puede deshacer.`)) return;
 
     const user = auth.currentUser;
-    const emailSanitized = user.email.replace(/[@.]/g, '_'); // Sanitizar email para usar como ID
+    const emailSanitized = user.email.replace(/[@.]/g, '_');
     const ahora = new Date();
     
-    // Formato: 19/11/2025 18:37:15
     const fecha = ahora.toLocaleDateString('es-CO', {
       day: '2-digit',
       month: '2-digit',
@@ -325,22 +327,18 @@
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Registrando...';
 
     try {
-      // Guardar voto usando el email como ID del documento
       const votoData = {
         Email: user.email,
         Candidato: selectedId,
-        Candidato_Nombre: selectedName, // Guardamos también el nombre para referencia
+        Candidato_Nombre: selectedName,
         Fecha: fecha,
         Codigo_Verificacion: codigo
       };
 
       await setDoc(doc(db, 'elections', electionId, 'votes', emailSanitized), votoData);
-
-      // Guardar localmente
       votoGuardado = votoData;
       
-      // Mostrar confirmación
-      mostrarYaVoto(votoData);
+      await mostrarYaVoto(votoData, user.email);
 
     } catch (error) {
       console.error('Error al votar:', error);
@@ -350,8 +348,8 @@
     }
   };
 
-  // ----------- MOSTRAR "YA VOTÓ" + CERTIFICADO -----------
-  function mostrarYaVoto(voto) {
+  // ----------- MOSTRAR "YA VOTÓ" + CERTIFICADO CON NOMBRE Y CÉDULA -----------
+  async function mostrarYaVoto(voto, email) {
     hide('voteBox'); 
     hide('adminBox'); 
     hide('loginBox'); 
@@ -359,10 +357,24 @@
     hide('resultBox');
     show('yaVotoBox');
 
-    // Asegurar que usamos los campos correctos (con o sin mayúsculas)
-    const email = voto.Email || voto.email || 'No disponible';
+    // Obtener datos del votante si no los tenemos
+    if (!voterData) {
+      const emailSanitized = email.replace(/[@.]/g, '_');
+      try {
+        const voterSnap = await getDoc(doc(db, 'elections', electionId, 'voters', emailSanitized));
+        if (voterSnap.exists()) {
+          voterData = voterSnap.data();
+        }
+      } catch (error) {
+        console.error('Error al obtener datos del votante:', error);
+      }
+    }
+
+    const emailMostrar = voto.Email || voto.email || email;
     const fecha = voto.Fecha || voto.fecha || 'No disponible';
     const codigo = voto.Codigo_Verificacion || voto.codigoVerificacion || 'No disponible';
+    const nombre = voterData?.nombre || 'No disponible';
+    const cedula = voterData?.cedula || 'No disponible';
 
     const html = `
       <div class="certificado-container" id="certificado">
@@ -373,7 +385,9 @@
         </div>
         <div class="text-center">
           <p>Se certifica que:</p>
-          <h4 class="text-primary fw-bold">${email}</h4>
+          <h4 class="text-primary fw-bold">${nombre}</h4>
+          <p><strong>Cédula:</strong> ${cedula}</p>
+          <p><strong>Correo:</strong> ${emailMostrar}</p>
           <p>Ha ejercido su derecho al voto</p>
           <p><strong>Fecha:</strong> ${fecha}</p>
           <div style="margin-top: 30px;">
@@ -452,7 +466,7 @@
       let deleteCount = 0;
       
       for (const votoDoc of votesSnap.docs) {
-        await votoDoc.ref.delete();
+        await deleteDoc(votoDoc.ref);
         deleteCount++;
       }
       
@@ -478,12 +492,10 @@
       const votesSnap = await getDocs(collection(db, 'elections', electionId, 'votes'));
       const tally = {};
       
-      // Inicializar contadores
       Object.keys(data.candidates).forEach(id => {
         tally[id] = 0;
       });
 
-      // Contar votos
       votesSnap.forEach(d => {
         const candidato = d.data().Candidato;
         if (tally[candidato] !== undefined) {
@@ -501,7 +513,6 @@
         }))
         .sort((a, b) => b.votos - a.votos);
 
-      // Estadísticas
       const diferencia = sorted.length > 1 ? sorted[0].votos - sorted[1].votos : sorted[0]?.votos || 0;
       
       let statsHtml = `
@@ -529,7 +540,6 @@
       
       document.getElementById('statsContainer').innerHTML = statsHtml;
 
-      // Resultados detallados
       let html = '<div class="card" style="padding: 40px;">' +
         '<h3 class="text-center mb-4" style="color: var(--institucional);"><i class="bi bi-list-ol"></i> Resultados Detallados</h3>';
 
@@ -556,7 +566,6 @@
       html += '</div>';
       document.getElementById('resultadosContainer').innerHTML = html;
 
-      // Ganador destacado
       if (sorted[0] && totalVotos > 0) {
         const ganadorHtml = `
           <div class="card mt-4" style="background: linear-gradient(135deg, #d4edda, #c3e6cb); padding: 40px; text-align: center; border: 3px solid #28a745;">
@@ -568,13 +577,11 @@
         document.getElementById('ganadorContainer').innerHTML = ganadorHtml;
       }
 
-      // Crear gráficos
       if (totalVotos > 0) {
         const nombres = sorted.map(r => r.nombre);
         const votos = sorted.map(r => r.votos);
         const colores = ['rgba(0, 51, 160, 0.8)', 'rgba(59, 130, 246, 0.8)', 'rgba(147, 197, 253, 0.8)', 'rgba(96, 165, 250, 0.8)'];
 
-        // Gráfico de pastel
         new Chart(document.getElementById('graficoPie'), {
           type: 'doughnut',
           data: {
@@ -594,7 +601,6 @@
           }
         });
 
-        // Gráfico de barras
         new Chart(document.getElementById('graficoBarras'), {
           type: 'bar',
           data: {
