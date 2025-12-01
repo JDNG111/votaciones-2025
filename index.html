@@ -186,14 +186,10 @@
         if (user.email === 'alvaro.velez@cali.gov.co') {
           await setDoc(electionRef, {
             open: true,
-            candidates: {
-              'Candidato 1': 'Ana María Pérez',
-              'Candidato 2': 'Carlos Andrés Ramírez',
-              'Candidato 3': 'Laura Victoria Gómez'
-            },
             adminUID: user.uid,
             createdAt: new Date()
           });
+          alert('Elección creada. Ahora crea la colección "candidatos" en Firebase.');
           location.reload();
           return;
         } else {
@@ -204,13 +200,30 @@
 
       const info = snap.data();
 
-      // 2. Verificar si las votaciones están cerradas - MOSTRAR RESULTADOS PARA TODOS
-      if (!info.open) {
-        await showResults(info, user);
+      // 2. Obtener candidatos desde la colección "candidatos"
+      let candidatos = {};
+      try {
+        const candidatosSnap = await getDocs(collection(db, 'elections', electionId, 'candidatos'));
+        if (candidatosSnap.empty) {
+          alert('No hay candidatos registrados. El administrador debe crear la colección "candidatos".');
+          return;
+        }
+        candidatosSnap.forEach(doc => {
+          candidatos[doc.id] = doc.data();
+        });
+      } catch (error) {
+        console.error('Error al cargar candidatos:', error);
+        alert('Error al cargar candidatos: ' + error.message);
         return;
       }
 
-      // 3. Verificar si está habilitado (existe en voters)
+      // 3. Verificar si las votaciones están cerradas - MOSTRAR RESULTADOS PARA TODOS
+      if (!info.open) {
+        await showResults(info, user, candidatos);
+        return;
+      }
+
+      // 4. Verificar si está habilitado (existe en voters)
       const emailSanitized = user.email.replace(/[@.]/g, '_');
       try {
         const voterSnap = await getDoc(doc(db, 'elections', electionId, 'voters', emailSanitized));
@@ -219,7 +232,6 @@
           document.getElementById('rejectedEmail').textContent = user.email;
           return;
         }
-        // Guardar datos del votante
         voterData = voterSnap.data();
       } catch (error) {
         console.error('Error al verificar votante:', error);
@@ -228,7 +240,7 @@
         return;
       }
 
-      // 4. ¿Ya votó?
+      // 5. ¿Ya votó?
       try {
         const votoSnap = await getDoc(doc(db, 'elections', electionId, 'votes', emailSanitized));
         if (votoSnap.exists()) {
@@ -256,12 +268,12 @@
         }
       }
 
-      // 5. Mostrar candidatos
+      // 6. Mostrar candidatos
       show('voteBox');
       if (user.email === 'alvaro.velez@cali.gov.co') {
         show('adminBox');
       }
-      drawCandidates(info.candidates);
+      drawCandidates(candidatos);
 
     } catch (error) {
       console.error('Error en autenticación:', error);
@@ -270,17 +282,22 @@
   });
 
   // ----------- CANDIDATOS -----------
-  function drawCandidates(list) {
+  function drawCandidates(candidatos) {
     const box = document.getElementById('candidates');
     box.innerHTML = '';
-    Object.entries(list).forEach(([id, name]) => {
+    Object.entries(candidatos).forEach(([id, candidato]) => {
+      const nombre = candidato.nombre || 'Sin nombre';
+      const foto = candidato.foto || `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&size=250&background=667eea&color=fff`;
+      const descripcion = candidato.descripcion || '';
+      
       const col = document.createElement('div');
       col.className = 'col-md-4';
       col.innerHTML =
-        `<div class="candidato-card" data-id="${id}" data-name="${name}">
-           <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=250&background=667eea&color=fff" class="img-fluid" style="height:200px;object-fit:cover;width:100%;">
+        `<div class="candidato-card" data-id="${id}" data-name="${nombre}">
+           <img src="${foto}" class="img-fluid" style="height:200px;object-fit:cover;width:100%;" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&size=250&background=667eea&color=fff'">
            <div class="p-3 text-center">
-             <h5 class="text-primary fw-bold mb-0">${name}</h5>
+             <h5 class="text-primary fw-bold mb-1">${nombre}</h5>
+             ${descripcion ? `<p class="text-muted small mb-0">${descripcion}</p>` : ''}
            </div>
          </div>`;
       box.appendChild(col);
@@ -545,12 +562,11 @@
 
       sorted.forEach((r, i) => {
         const medalla = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : '•'));
-        const foto = `https://ui-avatars.com/api/?name=${encodeURIComponent(r.nombre)}&size=80&background=667eea&color=fff`;
         
         html += `<div class="resultado-card${i === 0 ? ' ganador' : ''}">
           <div class="d-flex align-items-center mb-3">
             <div style="font-size: 2rem; margin-right: 15px;">${medalla}</div>
-            <img src="${foto}" style="width: 60px; height: 60px; border-radius: 50%; margin-right: 15px; border: 3px solid var(--institucional);">
+            <img src="${r.foto}" style="width: 60px; height: 60px; border-radius: 50%; margin-right: 15px; border: 3px solid var(--institucional); object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(r.nombre)}&size=80&background=667eea&color=fff'">
             <div class="flex-grow-1">
               <h4 class="mb-0 text-primary">${r.nombre}</h4>
               <div class="text-muted">${r.votos} votos</div>
