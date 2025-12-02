@@ -200,7 +200,11 @@
 
       // 3. Verificar si las votaciones están cerradas - MOSTRAR RESULTADOS PARA TODOS
       if (!info.open) {
-        await showResults(info, user, candidatos);
+        console.log('🔒 Votaciones cerradas, mostrando resultados...');
+        console.log('Pasando a showResults - info:', info);
+        console.log('Pasando a showResults - user:', user);
+        console.log('Pasando a showResults - candidatos:', candidatos);
+        await showResults(candidatos);
         return;
       }
 
