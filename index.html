@@ -86,11 +86,11 @@
           <h1 style="font-size: 2.5rem; margin-top: 15px;">Resultados Oficiales</h1>
           <p style="color: #666;">Proceso Electoral Finalizado</p>
         </div>
-       
+        
         <div class="row mb-4" id="statsContainer"></div>
-       
+        
         <div id="resultadosContainer"></div>
-       
+        
         <div id="ganadorContainer"></div>
       </div>
 
@@ -136,11 +136,12 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
   const provider = new GoogleAuthProvider();
+
   const electionId = 'eleccion2025';
   const electionRef = doc(db, 'elections', electionId);
 
   let votoGuardado = null;
-  let voterData = null;
+  let voterData = null; // Datos del votante (nombre, cédula)
 
   // ---------- LOGIN ----------
   document.getElementById('loginBtn').onclick = () => signInWithPopup(auth, provider);
@@ -152,20 +153,23 @@
 
   // ---------- AUTH STATE ----------
   onAuthStateChanged(auth, async user => {
-    if (!user) {
-      show('loginBox');
-      return;
+    if (!user) { 
+      show('loginBox'); 
+      return; 
     }
-
     hide('loginBox');
     document.getElementById('userEmail').textContent = user.email;
 
     try {
+      // 1. Obtener información de la elección
       const snap = await getDoc(electionRef);
-      
       if (!snap.exists()) {
         if (user.email === 'alvaro.velez@cali.gov.co') {
-          await setDoc(electionRef, { open: true, adminUID: user.uid, createdAt: new Date() });
+          await setDoc(electionRef, {
+            open: true,
+            adminUID: user.uid,
+            createdAt: new Date()
+          });
           alert('Elección creada. Ahora crea la colección "candidatos" en Firebase.');
           location.reload();
           return;
@@ -177,46 +181,79 @@
 
       const info = snap.data();
 
-      // Cargar candidatos
+      // 2. Obtener candidatos desde la colección "candidatos"
       let candidatos = {};
-      const candidatosSnap = await getDocs(collection(db, 'elections', electionId, 'candidatos'));
-      if (candidatosSnap.empty) {
-        alert('No hay candidatos registrados. El administrador debe crear la colección "candidatos".');
+      try {
+        const candidatosSnap = await getDocs(collection(db, 'elections', electionId, 'candidatos'));
+        if (candidatosSnap.empty) {
+          alert('No hay candidatos registrados. El administrador debe crear la colección "candidatos".');
+          return;
+        }
+        candidatosSnap.forEach(doc => {
+          candidatos[doc.id] = doc.data();
+        });
+      } catch (error) {
+        console.error('Error al cargar candidatos:', error);
+        alert('Error al cargar candidatos: ' + error.message);
         return;
       }
-      candidatosSnap.forEach(doc => {
-        candidatos[doc.id] = doc.data();
-      });
 
-      // Si las votaciones están cerradas → mostrar resultados a todos
+      // 3. Verificar si las votaciones están cerradas - MOSTRAR RESULTADOS PARA TODOS
       if (!info.open) {
         await showResults(info, user, candidatos);
         return;
       }
 
-      // Verificar si el usuario está habilitado
+      // 4. Verificar si está habilitado (existe en voters)
       const emailSanitized = user.email.replace(/[@.]/g, '_');
-      const voterSnap = await getDoc(doc(db, 'elections', electionId, 'voters', emailSanitized));
-      
-      if (!voterSnap.exists()) {
+      try {
+        const voterSnap = await getDoc(doc(db, 'elections', electionId, 'voters', emailSanitized));
+        if (!voterSnap.exists()) {
+          show('notAllowedBox');
+          document.getElementById('rejectedEmail').textContent = user.email;
+          return;
+        }
+        voterData = voterSnap.data();
+      } catch (error) {
+        console.error('Error al verificar votante:', error);
         show('notAllowedBox');
         document.getElementById('rejectedEmail').textContent = user.email;
         return;
       }
-      voterData = voterSnap.data();
 
-      // ¿Ya votó?
-      const votoSnap = await getDoc(doc(db, 'elections', electionId, 'votes', emailSanitized));
-      if (votoSnap.exists()) {
-        votoGuardado = votoSnap.data();
-        await mostrarYaVoto(votoGuardado, user.email);
-        return;
+      // 5. ¿Ya votó?
+      try {
+        const votoSnap = await getDoc(doc(db, 'elections', electionId, 'votes', emailSanitized));
+        if (votoSnap.exists()) {
+          votoGuardado = votoSnap.data();
+          await mostrarYaVoto(votoGuardado, user.email);
+          return;
+        }
+      } catch (error) {
+        console.log('Verificación directa falló, intentando método alternativo...');
+        try {
+          const allVotesSnap = await getDocs(collection(db, 'elections', electionId, 'votes'));
+          let yaVoto = false;
+          allVotesSnap.forEach(docSnap => {
+            if (docSnap.id === emailSanitized) {
+              yaVoto = true;
+              votoGuardado = docSnap.data();
+            }
+          });
+          if (yaVoto) {
+            await mostrarYaVoto(votoGuardado, user.email);
+            return;
+          }
+        } catch (error2) {
+          console.log('Error en verificación alternativa:', error2);
+        }
       }
 
-      // Mostrar votación normal
+      // 6. Mostrar candidatos
       show('voteBox');
-      if (user.email === 'alvaro.velez@cali.gov.co') show('adminBox');
-
+      if (user.email === 'alvaro.velez@cali.gov.co') {
+        show('adminBox');
+      }
       drawCandidates(candidatos);
 
     } catch (error) {
@@ -233,19 +270,19 @@
       const nombre = candidato.nombre || 'Sin nombre';
       const foto = candidato.foto || `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&size=250&background=667eea&color=fff`;
       const descripcion = candidato.descripcion || '';
-
+      
       const col = document.createElement('div');
       col.className = 'col-md-4';
-      col.innerHTML = `
-        <div class="candidato-card" data-id="${id}" data-name="${nombre}">
-          <img src="${foto}" class="img-fluid" style="height:200px;object-fit:cover;width:100%;" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&size=250&background=667eea&color=fff'">
-          <div class="p-3 text-center">
-            <h5 class="text-primary fw-bold mb-1">${nombre}</h5>
-            ${descripcion ? `<p class="text-muted small mb-0">${descripcion}</p>` : ''}
-          </div>
-        </div>`;
+      col.innerHTML =
+        `<div class="candidato-card" data-id="${id}" data-name="${nombre}">
+           <img src="${foto}" class="img-fluid" style="height:200px;object-fit:cover;width:100%;" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&size=250&background=667eea&color=fff'">
+           <div class="p-3 text-center">
+             <h5 class="text-primary fw-bold mb-1">${nombre}</h5>
+             ${descripcion ? `<p class="text-muted small mb-0">${descripcion}</p>` : ''}
+           </div>
+         </div>`;
       box.appendChild(col);
-
+      
       col.querySelector('.candidato-card').addEventListener('click', function() {
         selectCandidate(this);
       });
@@ -269,10 +306,18 @@
     const user = auth.currentUser;
     const emailSanitized = user.email.replace(/[@.]/g, '_');
     const ahora = new Date();
-
-    const fecha = ahora.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' +
-                  ahora.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-
+    
+    const fecha = ahora.toLocaleDateString('es-CO', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }) + ' ' + ahora.toLocaleTimeString('es-CO', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    
     const codigo = Math.random().toString(36).slice(-8).toUpperCase() + Math.random().toString(36).slice(-4).toUpperCase();
 
     const btn = document.getElementById('btnVotar');
@@ -290,7 +335,9 @@
 
       await setDoc(doc(db, 'elections', electionId, 'votes', emailSanitized), votoData);
       votoGuardado = votoData;
+      
       await mostrarYaVoto(votoData, user.email);
+
     } catch (error) {
       console.error('Error al votar:', error);
       alert('Error al registrar el voto: ' + error.message);
@@ -299,15 +346,26 @@
     }
   };
 
-  // ----------- MOSTRAR "YA VOTÓ" + CERTIFICADO -----------
+  // ----------- MOSTRAR "YA VOTÓ" + CERTIFICADO CON NOMBRE Y CÉDULA -----------
   async function mostrarYaVoto(voto, email) {
-    hide('voteBox'); hide('adminBox'); hide('loginBox'); hide('notAllowedBox'); hide('resultBox');
+    hide('voteBox'); 
+    hide('adminBox'); 
+    hide('loginBox'); 
+    hide('notAllowedBox');
+    hide('resultBox');
     show('yaVotoBox');
 
+    // Obtener datos del votante si no los tenemos
     if (!voterData) {
       const emailSanitized = email.replace(/[@.]/g, '_');
-      const voterSnap = await getDoc(doc(db, 'elections', electionId, 'voters', emailSanitized));
-      if (voterSnap.exists()) voterData = voterSnap.data();
+      try {
+        const voterSnap = await getDoc(doc(db, 'elections', electionId, 'voters', emailSanitized));
+        if (voterSnap.exists()) {
+          voterData = voterSnap.data();
+        }
+      } catch (error) {
+        console.error('Error al obtener datos del votante:', error);
+      }
     }
 
     const emailMostrar = voto.Email || voto.email || email;
@@ -347,98 +405,115 @@
           <i class="bi bi-file-pdf"></i> Descargar PDF
         </button>
       </div>`;
-
+    
     document.getElementById('certificadoContainer').innerHTML = html;
   }
 
-  // ----------- ADMINISTRADOR -----------
+  // ----------- CERRAR VOTACIONES -----------
   document.getElementById('closeBtn').onclick = async () => {
     if (!confirm('¿Seguro de cerrar las votaciones?\n\nEsto mostrará los resultados a todos los usuarios.')) return;
+    
     const btn = document.getElementById('closeBtn');
-    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Cerrando...';
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Cerrando...';
+    
     try {
       await updateDoc(electionRef, { open: false });
       alert('Votaciones cerradas exitosamente. Recargando...');
       location.reload();
     } catch (e) {
       alert('Error: ' + e.message);
-      btn.disabled = false; btn.innerHTML = '<i class="bi bi-lock-fill"></i> Cerrar votaciones';
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-lock-fill"></i> Cerrar votaciones';
     }
   };
 
+  // ----------- ABRIR VOTACIONES -----------
   document.getElementById('openBtn').onclick = async () => {
     if (!confirm('¿Seguro de abrir las votaciones?')) return;
+    
     const btn = document.getElementById('openBtn');
-    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Abriendo...';
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Abriendo...';
+    
     try {
       await updateDoc(electionRef, { open: true });
       alert('Votaciones abiertas exitosamente. Recargando...');
       location.reload();
     } catch (e) {
       alert('Error: ' + e.message);
-      btn.disabled = false; btn.innerHTML = '<i class="bi bi-unlock-fill"></i> Abrir votaciones';
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-unlock-fill"></i> Abrir votaciones';
     }
   };
 
+  // ----------- RESETEAR VOTOS -----------
   document.getElementById('resetBtn').onclick = async () => {
     const confirmacion = prompt('⚠️ ADVERTENCIA: Esto eliminará TODOS los votos.\n\nEscribe "RESETEAR" para confirmar:');
-    if (confirmacion !== 'RESETEAR') { alert('Operación cancelada'); return; }
-
+    if (confirmacion !== 'RESETEAR') {
+      alert('Operación cancelada');
+      return;
+    }
+    
     const btn = document.getElementById('resetBtn');
-    btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Eliminando votos...';
-
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Eliminando votos...';
+    
     try {
       const votesSnap = await getDocs(collection(db, 'elections', electionId, 'votes'));
+      let deleteCount = 0;
+      
       for (const votoDoc of votesSnap.docs) {
         await deleteDoc(votoDoc.ref);
+        deleteCount++;
       }
-      alert(`✅ Se eliminaron todos los votos. Recargando...`);
+      
+      alert(`✅ Se eliminaron ${deleteCount} votos exitosamente. Recargando...`);
       location.reload();
     } catch (e) {
       alert('Error al resetear votos: ' + e.message);
-      btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Resetear todos los votos';
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Resetear todos los votos';
     }
   };
 
-  // ----------- MOSTRAR RESULTADOS (FUNCIÓN CORREGIDA) -----------
-  async function showResults(info, user, candidatos) {
-    hide('voteBox'); hide('adminBox'); hide('loginBox'); hide('notAllowedBox'); hide('yaVotoBox');
+  // ----------- MOSTRAR RESULTADOS -----------
+  async function showResults(data, user) {
+    hide('voteBox'); 
+    hide('adminBox'); 
+    hide('loginBox'); 
+    hide('notAllowedBox'); 
+    hide('yaVotoBox');
     show('resultBox');
-
-    // Si es admin, sigue viendo el panel de control aunque esté cerrado
-    if (user && user.email === 'alvaro.velez@cali.gov.co') {
-      show('adminBox');
-    }
 
     try {
       const votesSnap = await getDocs(collection(db, 'elections', electionId, 'votes'));
       const tally = {};
-
-      // Inicializar todos los candidatos con 0 votos
-      Object.keys(candidatos || {}).forEach(id => {
+      
+      Object.keys(data.candidates).forEach(id => {
         tally[id] = 0;
       });
 
-      // Contar votos
       votesSnap.forEach(d => {
         const candidato = d.data().Candidato;
-        if (tally[candidato] !== undefined) tally[candidato]++;
+        if (tally[candidato] !== undefined) {
+          tally[candidato]++;
+        }
       });
 
       const totalVotos = votesSnap.size;
-
       const sorted = Object.entries(tally)
         .map(([id, votos]) => ({
-          id,
-          nombre: candidatos[id]?.nombre || 'Sin nombre',
-          foto: candidatos[id]?.foto || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidatos[id]?.nombre || id)}&size=80&background=667eea&color=fff`,
-          votos,
+          candidato: id,
+          nombre: data.candidates[id],
+          votos: votos,
           porcentaje: totalVotos > 0 ? ((votos / totalVotos) * 100).toFixed(1) : 0
         }))
         .sort((a, b) => b.votos - a.votos);
 
-      // Estadísticas
-      const statsHtml = `
+      const diferencia = sorted.length > 1 ? sorted[0].votos - sorted[1].votos : sorted[0]?.votos || 0;
+      
+      let statsHtml = `
         <div class="col-md-6 mb-3">
           <div class="stats-card">
             <i class="bi bi-people-fill" style="font-size: 2rem; color: var(--institucional);"></i>
@@ -453,51 +528,61 @@
             <div class="stats-label">Candidatos</div>
           </div>
         </div>`;
+      
       document.getElementById('statsContainer').innerHTML = statsHtml;
 
-      // Resultados detallados
-      let html = '<div class="card" style="padding: 40px;"><h3 class="text-center mb-4" style="color: var(--institucional);"><i class="bi bi-list-ol"></i> Resultados Detallados</h3>';
+      let html = '<div class="card" style="padding: 40px;">' +
+        '<h3 class="text-center mb-4" style="color: var(--institucional);"><i class="bi bi-list-ol"></i> Resultados Detallados</h3>';
+
       sorted.forEach((r, i) => {
-        html += `
-          <div class="resultado-card${i === 0 ? ' ganador' : ''}">
-            <div class="d-flex align-items-center mb-3">
-              <img src="${r.foto}" style="width: 60px; height: 60px; border-radius: 50%; margin-right: 15px; border: 3px solid var(--institucional); object-fit: cover;" 
-                   onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(r.nombre)}&size=80&background=667eea&color=fff'">
-              <div class="flex-grow-1">
-                <h4 class="mb-0 text-primary">${r.nombre}</h4>
-                <div class="text-muted">${r.votos} votos</div>
-              </div>
-              <div style="font-size: 2rem; font-weight: bold; color: var(--institucional);">${r.porcentaje}%</div>
+        html += `<div class="resultado-card${i === 0 ? ' ganador' : ''}">
+          <div class="d-flex align-items-center mb-3">
+            <img src="${r.foto}" style="width: 60px; height: 60px; border-radius: 50%; margin-right: 15px; border: 3px solid var(--institucional); object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(r.nombre)}&size=80&background=667eea&color=fff'">
+            <div class="flex-grow-1">
+              <h4 class="mb-0 text-primary">${r.nombre}</h4>
+              <div class="text-muted">${r.votos} votos</div>
             </div>
-            <div class="barra-progreso">
-              <div class="barra-fill" style="width: ${r.porcentaje}%">${r.porcentaje}%</div>
-            </div>
-          </div>`;
+            <div style="font-size: 2rem; font-weight: bold; color: var(--institucional);">${r.porcentaje}%</div>
+          </div>
+          <div class="barra-progreso">
+            <div class="barra-fill" style="width: ${r.porcentaje}%">${r.porcentaje}%</div>
+          </div>
+        </div>`;
       });
+
       html += '</div>';
       document.getElementById('resultadosContainer').innerHTML = html;
 
-      // Firmas (organizadores)
+      // Obtener firmas desde Firebase
       let firmasHtml = `
         <div class="card mt-4" style="padding: 40px;">
           <h4 class="text-center mb-4" style="color: var(--institucional);">Organizadores del Proceso Electoral</h4>
           <div class="row" id="firmasContainer">
             <div class="col-12 text-center">
-              <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div>
+              <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando...</span>
+              </div>
             </div>
           </div>
         </div>`;
       document.getElementById('ganadorContainer').innerHTML = firmasHtml;
 
+      // Cargar firmas desde Firebase
       try {
         const firmasSnap = await getDocs(collection(db, 'elections', electionId, 'firmas'));
-        if (!firmasSnap.empty) {
-          let content = '';
-          firmasSnap.forEach(doc => {
-            const f = doc.data();
-            const imagen = f.imagen || 'https://via.placeholder.com/200x80?text=Firma';
-            const nombre = f.nombre || 'Nombre no disponible';
-            content += `
+        let firmasData = [];
+        firmasSnap.forEach(doc => {
+          firmasData.push(doc.data());
+        });
+
+        // Si hay firmas, mostrarlas
+        if (firmasData.length > 0) {
+          let firmasContentHtml = '';
+          firmasData.forEach(firma => {
+            const imagen = firma.imagen || 'https://via.placeholder.com/200x80?text=Firma';
+            const nombre = firma.nombre || 'Nombre no disponible';
+            
+            firmasContentHtml += `
               <div class="col-md-6 text-center mb-4">
                 <img src="${imagen}" alt="Firma" style="max-width: 200px; margin-bottom: 15px;">
                 <h5 class="mb-1" style="color: var(--institucional);">${nombre}</h5>
@@ -505,28 +590,58 @@
                 <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
               </div>`;
           });
-          document.getElementById('firmasContainer').innerHTML = content;
+          document.getElementById('firmasContainer').innerHTML = firmasContentHtml;
         } else {
-          document.getElementById('firmasContainer').innerHTML = `...placeholder por defecto...`;
+          // Si no hay firmas en Firebase, usar placeholders
+          document.getElementById('firmasContainer').innerHTML = `
+            <div class="col-md-6 text-center">
+              <img src="https://via.placeholder.com/200x80?text=Firma+1" alt="Firma 1" style="max-width: 200px; margin-bottom: 15px;">
+              <h5 class="mb-1" style="color: var(--institucional);">Nombre Completo 1</h5>
+              <p class="mb-1"><strong>Profesional Especializado</strong></p>
+              <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
+            </div>
+            <div class="col-md-6 text-center">
+              <img src="https://via.placeholder.com/200x80?text=Firma+2" alt="Firma 2" style="max-width: 200px; margin-bottom: 15px;">
+              <h5 class="mb-1" style="color: var(--institucional);">Nombre Completo 2</h5>
+              <p class="mb-1"><strong>Profesional Especializado</strong></p>
+              <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
+            </div>`;
         }
-      } catch (err) {
-        console.error('Error cargando firmas:', err);
-        // placeholders en caso de error
-        document.getElementById('firmasContainer').innerHTML = `...mismo placeholder...`;
+      } catch (error) {
+        console.error('Error al cargar firmas:', error);
+        // Mostrar placeholders en caso de error
+        document.getElementById('firmasContainer').innerHTML = `
+          <div class="col-md-6 text-center">
+            <img src="https://via.placeholder.com/200x80?text=Firma+1" alt="Firma 1" style="max-width: 200px; margin-bottom: 15px;">
+            <h5 class="mb-1" style="color: var(--institucional);">Nombre Completo 1</h5>
+            <p class="mb-1"><strong>Profesional Especializado</strong></p>
+            <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
+          </div>
+          <div class="col-md-6 text-center">
+            <img src="https://via.placeholder.com/200x80?text=Firma+2" alt="Firma 2" style="max-width: 200px; margin-bottom: 15px;">
+            <h5 class="mb-1" style="color: var(--institucional);">Nombre Completo 2</h5>
+            <p class="mb-1"><strong>Profesional Especializado</strong></p>
+            <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
+          </div>`;
       }
 
     } catch (error) {
       console.error('Error al cargar resultados:', error);
-      document.getElementById('resultadosContainer').innerHTML = '<div class="alert alert-danger">Error al cargar resultados: ' + error.message + '</div>';
+      document.getElementById('resultadosContainer').innerHTML = 
+        '<div class="alert alert-danger">Error al cargar resultados: ' + error.message + '</div>';
     }
   }
 
   // ----------- DESCARGAS -----------
   window.descargarPNG = function() {
     const cert = document.getElementById('certificado');
-    html2canvas(cert, { scale: 2, backgroundColor: '#ffffff', logging: false }).then(canvas => {
+    html2canvas(cert, { 
+      scale: 2, 
+      backgroundColor: '#ffffff',
+      logging: false 
+    }).then(canvas => {
       const link = document.createElement('a');
-      link.download = `Certificado_Votacion_COPASST_${Date.now()}.png`;
+      link.download = `Certificado_Votacion_COPASST_${new Date().getTime()}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
     });
@@ -534,7 +649,11 @@
 
   window.descargarPDF = function() {
     const cert = document.getElementById('certificado');
-    html2canvas(cert, { scale: 2, backgroundColor: '#ffffff', logging: false }).then(canvas => {
+    html2canvas(cert, { 
+      scale: 2, 
+      backgroundColor: '#ffffff',
+      logging: false 
+    }).then(canvas => {
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF('p', 'mm', 'a4');
       const imgData = canvas.toDataURL('image/png');
@@ -542,18 +661,26 @@
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       const x = (pdf.internal.pageSize.getWidth() - imgWidth) / 2;
       pdf.addImage(imgData, 'PNG', x, 15, imgWidth, imgHeight);
-      pdf.save(`Certificado_Votacion_COPASST_${Date.now()}.pdf`);
+      pdf.save(`Certificado_Votacion_COPASST_${new Date().getTime()}.pdf`);
     });
   };
 
   // ----------- HELPERS -----------
-  function show(id) { const el = document.getElementById(id); if (el) el.style.display = 'block'; }
-  function hide(id) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }
+  function show(id) { 
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'block'; 
+  }
+  
+  function hide(id) { 
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none'; 
+  }
 </script>
 
 <!-- Librerías auxiliares -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </body>
 </html>
