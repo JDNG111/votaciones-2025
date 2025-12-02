@@ -481,140 +481,128 @@
     }
   };
 
-  // ----------- MOSTRAR RESULTADOS -----------
+// ----------- MOSTRAR RESULTADOS -----------
 async function showResults(candidatos, user) {
-    hide('voteBox'); 
-    hide('adminBox'); 
-    hide('loginBox'); 
-    hide('notAllowedBox'); 
-    hide('yaVotoBox');
-    show('resultBox');
+  hide('voteBox'); 
+  hide('adminBox'); 
+  hide('loginBox'); 
+  hide('notAllowedBox'); 
+  hide('yaVotoBox');
+  show('resultBox');
 
-    try {
-      const votesSnap = await getDocs(collection(db, 'elections', electionId, 'votes'));
-      const tally = {};
-      
-      Object.keys(candidatos).forEach(id => {  // ✅ CORREGIDO
-        tally[id] = 0;
-      });
+  try {
+    const votesSnap = await getDocs(collection(db, 'elections', electionId, 'votes'));
+    const tally = {};
+    
+    // Inicializar contadores para cada candidato
+    Object.keys(candidatos).forEach(id => {
+      tally[id] = 0;
+    });
 
-      votesSnap.forEach(d => {
-        const candidato = d.data().Candidato;
-        if (tally[candidato] !== undefined) {
-          tally[candidato]++;
-        }
-      });
+    // Contar votos
+    votesSnap.forEach(d => {
+      const candidato = d.data().Candidato;
+      if (tally[candidato] !== undefined) {
+        tally[candidato]++;
+      }
+    });
 
-      const totalVotos = votesSnap.size;
-     const sorted = Object.entries(tally)
-  .map(([id, votos]) => ({
-    candidato: id,
-    nombre: candidatos[id].nombre,  // ✅ CORREGIDO
-    foto: candidatos[id].foto,      // ✅ AGREGADO (lo vas a necesitar después)
-    votos: votos,
-    porcentaje: totalVotos > 0 ? ((votos / totalVotos) * 100).toFixed(1) : 0
-  }))
-        .sort((a, b) => b.votos - a.votos);
+    const totalVotos = votesSnap.size;
+    const sorted = Object.entries(tally)
+      .map(([id, votos]) => ({
+        candidato: id,
+        nombre: candidatos[id].nombre || 'Sin nombre',
+        foto: candidatos[id].foto || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidatos[id].nombre || 'Usuario')}&size=250&background=667eea&color=fff`,
+        descripcion: candidatos[id].descripcion || '',
+        votos: votos,
+        porcentaje: totalVotos > 0 ? ((votos / totalVotos) * 100).toFixed(1) : 0
+      }))
+      .sort((a, b) => b.votos - a.votos);
 
-      const diferencia = sorted.length > 1 ? sorted[0].votos - sorted[1].votos : sorted[0]?.votos || 0;
-      
-      let statsHtml = `
-        <div class="col-md-6 mb-3">
-          <div class="stats-card">
-            <i class="bi bi-people-fill" style="font-size: 2rem; color: var(--institucional);"></i>
-            <div class="stats-number">${totalVotos}</div>
-            <div class="stats-label">Total Votos</div>
+    const diferencia = sorted.length > 1 ? sorted[0].votos - sorted[1].votos : sorted[0]?.votos || 0;
+    
+    // Estadísticas
+    let statsHtml = `
+      <div class="col-md-6 mb-3">
+        <div class="stats-card">
+          <i class="bi bi-people-fill" style="font-size: 2rem; color: var(--institucional);"></i>
+          <div class="stats-number">${totalVotos}</div>
+          <div class="stats-label">Total Votos</div>
+        </div>
+      </div>
+      <div class="col-md-6 mb-3">
+        <div class="stats-card">
+          <i class="bi bi-person-check-fill" style="font-size: 2rem; color: var(--institucional);"></i>
+          <div class="stats-number">${sorted.length}</div>
+          <div class="stats-label">Candidatos</div>
+        </div>
+      </div>`;
+    
+    document.getElementById('statsContainer').innerHTML = statsHtml;
+
+    // Resultados detallados
+    let html = '<div class="card" style="padding: 40px;">' +
+      '<h3 class="text-center mb-4" style="color: var(--institucional);"><i class="bi bi-list-ol"></i> Resultados Detallados</h3>';
+
+    sorted.forEach((r, i) => {
+      html += `<div class="resultado-card${i === 0 ? ' ganador' : ''}">
+        <div class="d-flex align-items-center mb-3">
+          <img src="${r.foto}" style="width: 60px; height: 60px; border-radius: 50%; margin-right: 15px; border: 3px solid var(--institucional); object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(r.nombre)}&size=80&background=667eea&color=fff'">
+          <div class="flex-grow-1">
+            <h4 class="mb-0 text-primary">${r.nombre}</h4>
+            <div class="text-muted">${r.votos} votos</div>
+          </div>
+          <div style="font-size: 2rem; font-weight: bold; color: var(--institucional);">${r.porcentaje}%</div>
+        </div>
+        <div class="barra-progreso">
+          <div class="barra-fill" style="width: ${r.porcentaje}%">${r.porcentaje}%</div>
+        </div>
+      </div>`;
+    });
+
+    html += '</div>';
+    document.getElementById('resultadosContainer').innerHTML = html;
+
+    // Obtener firmas desde Firebase
+    let firmasHtml = `
+      <div class="card mt-4" style="padding: 40px;">
+        <h4 class="text-center mb-4" style="color: var(--institucional);">Organizadores del Proceso Electoral</h4>
+        <div class="row" id="firmasContainer">
+          <div class="col-12 text-center">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Cargando...</span>
+            </div>
           </div>
         </div>
-        <div class="col-md-6 mb-3">
-          <div class="stats-card">
-            <i class="bi bi-person-check-fill" style="font-size: 2rem; color: var(--institucional);"></i>
-            <div class="stats-number">${sorted.length}</div>
-            <div class="stats-label">Candidatos</div>
-          </div>
-        </div>`;
-      
-      document.getElementById('statsContainer').innerHTML = statsHtml;
+      </div>`;
+    document.getElementById('ganadorContainer').innerHTML = firmasHtml;
 
-      let html = '<div class="card" style="padding: 40px;">' +
-        '<h3 class="text-center mb-4" style="color: var(--institucional);"><i class="bi bi-list-ol"></i> Resultados Detallados</h3>';
-
-      sorted.forEach((r, i) => {
-        html += `<div class="resultado-card${i === 0 ? ' ganador' : ''}">
-          <div class="d-flex align-items-center mb-3">
-            <img src="${r.foto}" style="width: 60px; height: 60px; border-radius: 50%; margin-right: 15px; border: 3px solid var(--institucional); object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(r.nombre)}&size=80&background=667eea&color=fff'">
-            <div class="flex-grow-1">
-              <h4 class="mb-0 text-primary">${r.nombre}</h4>
-              <div class="text-muted">${r.votos} votos</div>
-            </div>
-            <div style="font-size: 2rem; font-weight: bold; color: var(--institucional);">${r.porcentaje}%</div>
-          </div>
-          <div class="barra-progreso">
-            <div class="barra-fill" style="width: ${r.porcentaje}%">${r.porcentaje}%</div>
-          </div>
-        </div>`;
+    // Cargar firmas desde Firebase
+    try {
+      const firmasSnap = await getDocs(collection(db, 'elections', electionId, 'firmas'));
+      let firmasData = [];
+      firmasSnap.forEach(doc => {
+        firmasData.push(doc.data());
       });
 
-      html += '</div>';
-      document.getElementById('resultadosContainer').innerHTML = html;
-
-      // Obtener firmas desde Firebase
-      let firmasHtml = `
-        <div class="card mt-4" style="padding: 40px;">
-          <h4 class="text-center mb-4" style="color: var(--institucional);">Organizadores del Proceso Electoral</h4>
-          <div class="row" id="firmasContainer">
-            <div class="col-12 text-center">
-              <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Cargando...</span>
-              </div>
-            </div>
-          </div>
-        </div>`;
-      document.getElementById('ganadorContainer').innerHTML = firmasHtml;
-
-      // Cargar firmas desde Firebase
-      try {
-        const firmasSnap = await getDocs(collection(db, 'elections', electionId, 'firmas'));
-        let firmasData = [];
-        firmasSnap.forEach(doc => {
-          firmasData.push(doc.data());
-        });
-
-        // Si hay firmas, mostrarlas
-        if (firmasData.length > 0) {
-          let firmasContentHtml = '';
-          firmasData.forEach(firma => {
-            const imagen = firma.imagen || 'https://via.placeholder.com/200x80?text=Firma';
-            const nombre = firma.nombre || 'Nombre no disponible';
-            
-            firmasContentHtml += `
-              <div class="col-md-6 text-center mb-4">
-                <img src="${imagen}" alt="Firma" style="max-width: 200px; margin-bottom: 15px;">
-                <h5 class="mb-1" style="color: var(--institucional);">${nombre}</h5>
-                <p class="mb-1"><strong>Profesional Especializado</strong></p>
-                <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
-              </div>`;
-          });
-          document.getElementById('firmasContainer').innerHTML = firmasContentHtml;
-        } else {
-          // Si no hay firmas en Firebase, usar placeholders
-          document.getElementById('firmasContainer').innerHTML = `
-            <div class="col-md-6 text-center">
-              <img src="https://via.placeholder.com/200x80?text=Firma+1" alt="Firma 1" style="max-width: 200px; margin-bottom: 15px;">
-              <h5 class="mb-1" style="color: var(--institucional);">Nombre Completo 1</h5>
-              <p class="mb-1"><strong>Profesional Especializado</strong></p>
-              <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
-            </div>
-            <div class="col-md-6 text-center">
-              <img src="https://via.placeholder.com/200x80?text=Firma+2" alt="Firma 2" style="max-width: 200px; margin-bottom: 15px;">
-              <h5 class="mb-1" style="color: var(--institucional);">Nombre Completo 2</h5>
+      // Si hay firmas, mostrarlas
+      if (firmasData.length > 0) {
+        let firmasContentHtml = '';
+        firmasData.forEach(firma => {
+          const imagen = firma.imagen || 'https://via.placeholder.com/200x80?text=Firma';
+          const nombre = firma.nombre || 'Nombre no disponible';
+          
+          firmasContentHtml += `
+            <div class="col-md-6 text-center mb-4">
+              <img src="${imagen}" alt="Firma" style="max-width: 200px; margin-bottom: 15px;">
+              <h5 class="mb-1" style="color: var(--institucional);">${nombre}</h5>
               <p class="mb-1"><strong>Profesional Especializado</strong></p>
               <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
             </div>`;
-        }
-      } catch (error) {
-        console.error('Error al cargar firmas:', error);
-        // Mostrar placeholders en caso de error
+        });
+        document.getElementById('firmasContainer').innerHTML = firmasContentHtml;
+      } else {
+        // Si no hay firmas en Firebase, usar placeholders
         document.getElementById('firmasContainer').innerHTML = `
           <div class="col-md-6 text-center">
             <img src="https://via.placeholder.com/200x80?text=Firma+1" alt="Firma 1" style="max-width: 200px; margin-bottom: 15px;">
@@ -629,13 +617,30 @@ async function showResults(candidatos, user) {
             <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
           </div>`;
       }
-
     } catch (error) {
-      console.error('Error al cargar resultados:', error);
-      document.getElementById('resultadosContainer').innerHTML = 
-        '<div class="alert alert-danger">Error al cargar resultados: ' + error.message + '</div>';
+      console.error('Error al cargar firmas:', error);
+      // Mostrar placeholders en caso de error
+      document.getElementById('firmasContainer').innerHTML = `
+        <div class="col-md-6 text-center">
+          <img src="https://via.placeholder.com/200x80?text=Firma+1" alt="Firma 1" style="max-width: 200px; margin-bottom: 15px;">
+          <h5 class="mb-1" style="color: var(--institucional);">Nombre Completo 1</h5>
+          <p class="mb-1"><strong>Profesional Especializado</strong></p>
+          <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
+        </div>
+        <div class="col-md-6 text-center">
+          <img src="https://via.placeholder.com/200x80?text=Firma+2" alt="Firma 2" style="max-width: 200px; margin-bottom: 15px;">
+          <h5 class="mb-1" style="color: var(--institucional);">Nombre Completo 2</h5>
+          <p class="mb-1"><strong>Profesional Especializado</strong></p>
+          <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
+        </div>`;
     }
+
+  } catch (error) {
+    console.error('Error al cargar resultados:', error);
+    document.getElementById('resultadosContainer').innerHTML = 
+      '<div class="alert alert-danger">Error al cargar resultados: ' + error.message + '</div>';
   }
+}
 
   // ----------- DESCARGAS -----------
   window.descargarPNG = function() {
