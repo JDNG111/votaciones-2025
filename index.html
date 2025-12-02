@@ -581,14 +581,14 @@ async function showResults(candidatos, user) {
     try {
       const firmasSnap = await getDocs(collection(db, 'elections', electionId, 'firmas'));
       let firmasData = [];
-      firmasData.forEach((firma, index) => { 
+      firmasSnap.forEach(doc => { 
         firmasData.push(doc.data());
       });
 
       // Si hay firmas, mostrarlas
       if (firmasData.length > 0) {
         let firmasContentHtml = '';
-        firmasData.forEach(firma => {
+        firmasData.forEach((firma, index) => {  // ← Agregar ", index"
           const imagen = firma.imagen || 'https://via.placeholder.com/200x80?text=Firma';
           const nombre = firma.nombre || 'Nombre no disponible';
           const cargo = firma.cargo || (index === 0 ? 'Profesional Especializado' : 'Directora');
