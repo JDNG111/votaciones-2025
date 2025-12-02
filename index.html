@@ -581,7 +581,7 @@ async function showResults(candidatos, user) {
     try {
       const firmasSnap = await getDocs(collection(db, 'elections', electionId, 'firmas'));
       let firmasData = [];
-      firmasSnap.forEach(doc => {
+      firmasData.forEach((firma, index) => { 
         firmasData.push(doc.data());
       });
 
@@ -591,12 +591,13 @@ async function showResults(candidatos, user) {
         firmasData.forEach(firma => {
           const imagen = firma.imagen || 'https://via.placeholder.com/200x80?text=Firma';
           const nombre = firma.nombre || 'Nombre no disponible';
+          const cargo = firma.cargo || (index === 0 ? 'Profesional Especializado' : 'Directora');
           
           firmasContentHtml += `
             <div class="col-md-6 text-center mb-4">
               <img src="${imagen}" alt="Firma" style="max-width: 200px; margin-bottom: 15px;">
               <h5 class="mb-1" style="color: var(--institucional);">${nombre}</h5>
-              <p class="mb-1"><strong>Profesional Especializado</strong></p>
+              <p class="mb-1"><strong>${cargo}</strong></p>
               <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
             </div>`;
         });
