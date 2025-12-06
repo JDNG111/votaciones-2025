@@ -167,8 +167,8 @@
     },
     'Candidato 4': {
       nombre: 'Voto en Blanco',
-      foto: 'https://raw.githubusercontent.com/JDNG111/happy_day/refs/heads/main/candidato2.jpg',
-      descripcion: 'Ingeniero Industrial'
+      foto: '',
+      descripcion: ''
     }
   };
 
@@ -574,6 +574,7 @@
       // 🚀 LEER SOLO 1 DOCUMENTO (info de elección) EN VEZ DE 1500 VOTOS
       const totalVotos = info.totalVotos || 0;
       const resultados = info.resultados || {};
+      const votantesHabilitados = 1500; // Valor estático
 
       // Construir array de resultados
       const sorted = Object.entries(candidatos)
@@ -606,7 +607,7 @@
         <div class="col-md-4 mb-3">
           <div class="stats-card">
             <i class="bi bi-person-badge-fill" style="font-size: 2rem; color: var(--institucional);"></i>
-            <div class="stats-number">${VOTANTES_HABILITADOS}</div>
+            <div class="stats-number">${votantesHabilitados}</div>
             <div class="stats-label">Votantes Habilitados</div>
           </div>
         </div>`;
