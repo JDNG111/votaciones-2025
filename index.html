@@ -159,11 +159,6 @@
       nombre: 'María González',
       foto: 'https://raw.githubusercontent.com/JDNG111/happy_day/refs/heads/main/candidato3.jpg',
       descripcion: 'Psicóloga Organizacional'
-    },
-    'Candidato 4': {
-      nombre: 'Voto en Blanco',
-      foto: '',
-      descripcion: ''
     }
   };
 
@@ -334,14 +329,24 @@
         Codigo_Verificacion: codigo
       };
 
-      // Guardar voto
+      // PASO 1: Guardar voto
+      console.log('📝 Guardando voto...', votoData);
       await setDoc(doc(db, 'elections', electionId, 'votes', emailSanitized), votoData);
+      console.log('✅ Voto guardado');
 
-      // 🚀 ACTUALIZAR CONTADOR EN TIEMPO REAL (sin leer todos los votos)
-      await updateDoc(electionRef, {
-        totalVotos: increment(1),
-        [`resultados.${selectedId}`]: increment(1)
-      });
+      // PASO 2: Actualizar contadores
+      console.log('📊 Actualizando contadores...', selectedId);
+      try {
+        await updateDoc(electionRef, {
+          totalVotos: increment(1),
+          [`resultados.${selectedId}`]: increment(1)
+        });
+        console.log('✅ Contadores actualizados');
+      } catch (counterError) {
+        console.error('❌ Error al actualizar contadores:', counterError);
+        // El voto se guardó pero los contadores fallaron
+        alert('⚠️ Tu voto fue registrado, pero hubo un problema actualizando los contadores.\n\nContacta al administrador.');
+      }
 
       votoGuardado = votoData;
       await mostrarYaVoto(votoData, user.email);
