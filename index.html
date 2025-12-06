@@ -205,7 +205,10 @@
             adminUID: user.uid,
             createdAt: new Date(),
             totalVotos: 0,
-            resultados: {}
+            resultados: Object.keys(CANDIDATOS_ESTATICOS).reduce((acc, id) => {
+              acc[id] = 0;
+              return acc;
+            }, {})
           });
           alert('Elección creada. Recargando...');
           location.reload();
@@ -229,7 +232,16 @@
 
       // 🔥 LECTURA 2: Verificar si está habilitado
       const emailSanitized = user.email.replace(/[@.]/g, '_');
-      const voterSnap = await getDoc(doc(db, 'elections', electionId, 'voters', emailSanitized));
+      let voterSnap;
+      try {
+        voterSnap = await getDoc(doc(db, 'elections', electionId, 'voters', emailSanitized));
+      } catch (voterError) {
+        console.error('Error al verificar votante:', voterError);
+        show('notAllowedBox');
+        document.getElementById('rejectedEmail').textContent = user.email;
+        return;
+      }
+
       if (!voterSnap.exists()) {
         show('notAllowedBox');
         document.getElementById('rejectedEmail').textContent = user.email;
@@ -238,8 +250,15 @@
       voterData = voterSnap.data();
 
       // 🔥 LECTURA 3: ¿Ya votó?
-      const votoSnap = await getDoc(doc(db, 'elections', electionId, 'votes', emailSanitized));
-      if (votoSnap.exists()) {
+      let votoSnap;
+      try {
+        votoSnap = await getDoc(doc(db, 'elections', electionId, 'votes', emailSanitized));
+      } catch (voteError) {
+        console.error('Error al verificar voto:', voteError);
+        // Si hay error, asumimos que no ha votado
+      }
+
+      if (votoSnap && votoSnap.exists()) {
         votoGuardado = votoSnap.data();
         await mostrarYaVoto(votoGuardado, user.email);
         return;
