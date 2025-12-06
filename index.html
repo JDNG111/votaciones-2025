@@ -29,6 +29,7 @@
     .stats-number { font-size: 3rem; font-weight: bold; color: var(--institucional); line-height: 1; margin: 10px 0; }
     .stats-label { color: #666; font-size: 1rem; text-transform: uppercase; letter-spacing: 1px; }
     .dashboard-header { background: white; color: var(--institucional); padding: 40px; border-radius: 15px; margin-bottom: 30px; text-align: center; border: 3px solid var(--institucional); box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
+    footer { text-align: center; padding: 20px 0; color: #666; font-size: 0.85rem; margin-top: 50px; }
   </style>
 </head>
 <body>
@@ -120,6 +121,10 @@
   </div>
 </div>
 
+<footer>
+  <p class="mb-0">© 2025 Realizado por el Grupo CTO DADII</p>
+</footer>
+
 <!-- Firebase 12.6.0 modular -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
@@ -156,14 +161,9 @@
       descripcion: 'Ingeniero Industrial'
     },
     'Candidato 3': {
-      nombre: 'Laura Victoria Gómez',
+      nombre: 'María González',
       foto: 'https://raw.githubusercontent.com/JDNG111/happy_day/refs/heads/main/candidato3.jpg',
       descripcion: 'Psicóloga Organizacional'
-    },
-    'Candidato 4': {
-      nombre: 'Voto en Blanco',
-      foto: '',
-      descripcion: ''
     }
   };
 
@@ -428,6 +428,11 @@
         <button onclick="descargarPDF()" class="btn inst-button btn-lg">
           <i class="bi bi-file-pdf"></i> Descargar PDF
         </button>
+      </div>
+      <div class="text-center mt-3">
+        <button onclick="cerrarSesionYMostrarMensaje()" class="btn btn-outline-secondary">
+          <i class="bi bi-box-arrow-right"></i> Cerrar Sesión
+        </button>
       </div>`;
     
     document.getElementById('certificadoContainer').innerHTML = html;
@@ -579,18 +584,25 @@
 
       // Estadísticas
       let statsHtml = `
-        <div class="col-md-6 mb-3">
+        <div class="col-md-4 mb-3">
           <div class="stats-card">
             <i class="bi bi-people-fill" style="font-size: 2rem; color: var(--institucional);"></i>
             <div class="stats-number">${totalVotos}</div>
             <div class="stats-label">Total Votos</div>
           </div>
         </div>
-        <div class="col-md-6 mb-3">
+        <div class="col-md-4 mb-3">
           <div class="stats-card">
             <i class="bi bi-person-check-fill" style="font-size: 2rem; color: var(--institucional);"></i>
             <div class="stats-number">${sorted.length}</div>
             <div class="stats-label">Candidatos</div>
+          </div>
+        </div>
+        <div class="col-md-4 mb-3">
+          <div class="stats-card">
+            <i class="bi bi-person-badge-fill" style="font-size: 2rem; color: var(--institucional);"></i>
+            <div class="stats-number">${VOTANTES_HABILITADOS}</div>
+            <div class="stats-label">Votantes Habilitados</div>
           </div>
         </div>`;
       
@@ -676,6 +688,16 @@
       pdf.addImage(imgData, 'PNG', x, 15, imgWidth, imgHeight);
       pdf.save(`Certificado_Votacion_COPASST_${new Date().getTime()}.pdf`);
     });
+  };
+
+  // ----------- CERRAR SESIÓN DESPUÉS DE VOTAR -----------
+  window.cerrarSesionYMostrarMensaje = async function() {
+    if (confirm('¿Deseas cerrar sesión?')) {
+      await signOut(auth);
+      hide('yaVotoBox');
+      show('loginBox');
+      alert('✅ Sesión cerrada exitosamente.\n\nYa puedes cerrar esta pestaña.');
+    }
   };
 
   // ----------- HELPERS -----------
