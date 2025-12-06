@@ -109,6 +109,9 @@
           </button>
         </div>
         <br>
+        <button id="syncBtn" class="btn btn-info btn-lg mt-2 me-2">
+          <i class="bi bi-arrow-repeat"></i> Sincronizar Contadores
+        </button>
         <button id="resetBtn" class="btn btn-warning btn-lg mt-2">
           <i class="bi bi-arrow-clockwise"></i> Resetear todos los votos
         </button>
@@ -156,11 +159,6 @@
       nombre: 'María González',
       foto: 'https://raw.githubusercontent.com/JDNG111/happy_day/refs/heads/main/candidato3.jpg',
       descripcion: 'Psicóloga Organizacional'
-    },
-    'Candidato 4': {
-      nombre: 'Voto en Blanco',
-      foto: '',
-      descripcion: ''
     }
   };
 
@@ -401,6 +399,47 @@
     document.getElementById('certificadoContainer').innerHTML = html;
   }
 
+  // ----------- SINCRONIZAR CONTADORES -----------
+  document.getElementById('syncBtn').onclick = async () => {
+    if (!confirm('¿Sincronizar contadores con los votos actuales?\n\nEsto recalculará totalVotos y resultados.')) return;
+    
+    const btn = document.getElementById('syncBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sincronizando...';
+    
+    try {
+      // Leer todos los votos
+      const votesSnap = await getDocs(collection(db, 'elections', electionId, 'votes'));
+      const contadores = {};
+      
+      // Inicializar contadores para cada candidato
+      Object.keys(CANDIDATOS_ESTATICOS).forEach(id => {
+        contadores[id] = 0;
+      });
+      
+      // Contar votos
+      votesSnap.forEach(doc => {
+        const candidato = doc.data().Candidato;
+        if (contadores[candidato] !== undefined) {
+          contadores[candidato]++;
+        }
+      });
+      
+      // Actualizar en Firebase (números, no strings)
+      await updateDoc(electionRef, {
+        totalVotos: votesSnap.size,
+        resultados: contadores
+      });
+      
+      alert(`✅ Sincronización exitosa:\n\nTotal votos: ${votesSnap.size}\n${Object.entries(contadores).map(([k,v]) => `${k}: ${v}`).join('\n')}`);
+      location.reload();
+    } catch (e) {
+      alert('Error al sincronizar: ' + e.message);
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Sincronizar Contadores';
+    }
+  };
+
   // ----------- CERRAR VOTACIONES -----------
   document.getElementById('closeBtn').onclick = async () => {
     if (!confirm('¿Seguro de cerrar las votaciones?\n\nEsto mostrará los resultados a todos los usuarios.')) return;
@@ -460,10 +499,13 @@
         deleteCount++;
       }
 
-      // Resetear contadores
+      // Resetear contadores (números, no strings)
       await updateDoc(electionRef, {
         totalVotos: 0,
-        resultados: {}
+        resultados: Object.keys(CANDIDATOS_ESTATICOS).reduce((acc, id) => {
+          acc[id] = 0;
+          return acc;
+        }, {})
       });
       
       alert(`✅ Se eliminaron ${deleteCount} votos exitosamente. Recargando...`);
