@@ -121,7 +121,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
   import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
-  import { getFirestore, doc, getDoc, setDoc, collection, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+  import { getFirestore, doc, getDoc, setDoc, collection, getDocs, updateDoc, deleteDoc, increment } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDpbdE3QYBpvYbDmrYO8PjFH3rMJkinmwE",
@@ -140,8 +140,45 @@
   const electionId = 'eleccion2025';
   const electionRef = doc(db, 'elections', electionId);
 
+  // ========== DATOS ESTÁTICOS (NO REQUIEREN LECTURA) ==========
+  const CANDIDATOS_ESTATICOS = {
+    'Candidato 1': {
+      nombre: 'Ana María Pérez',
+      foto: 'https://raw.githubusercontent.com/JDNG111/happy_day/refs/heads/main/candidato1.jpg',
+      descripcion: 'Técnico en Seguridad'
+    },
+    'Candidato 2': {
+      nombre: 'Carlos Rodríguez',
+      foto: 'https://raw.githubusercontent.com/JDNG111/happy_day/refs/heads/main/candidato2.jpg',
+      descripcion: 'Ingeniero Industrial'
+    },
+    'Candidato 3': {
+      nombre: 'María González',
+      foto: 'https://raw.githubusercontent.com/JDNG111/happy_day/refs/heads/main/candidato3.jpg',
+      descripcion: 'Psicóloga Organizacional'
+    },
+    'Candidato 4': {
+      nombre: 'Voto en Blanco',
+      foto: '',
+      descripcion: ''
+    }
+  };
+
+  const FIRMAS_ESTATICAS = [
+    {
+      imagen: 'https://via.placeholder.com/200x80?text=Firma+1',
+      nombre: 'Karina Manzoni Flórez',
+      cargo: 'Subdirectora de Gestión Estratégica del Talento Humano'
+    },
+    {
+      imagen: 'https://via.placeholder.com/200x80?text=Firma+2',
+      nombre: 'Laura Patricia Álvarez Gómez',
+      cargo: 'Directora de Departamento Administrativo'
+    }
+  ];
+
   let votoGuardado = null;
-  let voterData = null; // Datos del votante (nombre, cédula)
+  let voterData = null;
 
   // ---------- LOGIN ----------
   document.getElementById('loginBtn').onclick = () => signInWithPopup(auth, provider);
@@ -161,16 +198,18 @@
     document.getElementById('userEmail').textContent = user.email;
 
     try {
-      // 1. Obtener información de la elección
+      // 🔥 LECTURA 1: Obtener información de la elección
       const snap = await getDoc(electionRef);
       if (!snap.exists()) {
         if (user.email === 'alvaro.velez@cali.gov.co') {
           await setDoc(electionRef, {
             open: true,
             adminUID: user.uid,
-            createdAt: new Date()
+            createdAt: new Date(),
+            totalVotos: 0,
+            resultados: {}
           });
-          alert('Elección creada. Ahora crea la colección "candidatos" en Firebase.');
+          alert('Elección creada. Recargando...');
           location.reload();
           return;
         } else {
@@ -181,79 +220,34 @@
 
       const info = snap.data();
 
-      // 2. Obtener candidatos desde la colección "candidatos"
-      let candidatos = {};
-      try {
-        const candidatosSnap = await getDocs(collection(db, 'elections', electionId, 'candidatos'));
-        if (candidatosSnap.empty) {
-          alert('No hay candidatos registrados. El administrador debe crear la colección "candidatos".');
-          return;
-        }
-        candidatosSnap.forEach(doc => {
-          candidatos[doc.id] = doc.data();
-        });
-      } catch (error) {
-        console.error('Error al cargar candidatos:', error);
-        alert('Error al cargar candidatos: ' + error.message);
-        return;
-      }
+      // ✅ USAR CANDIDATOS ESTÁTICOS (0 lecturas adicionales)
+      const candidatos = CANDIDATOS_ESTATICOS;
 
-      // 3. Verificar si las votaciones están cerradas - MOSTRAR RESULTADOS PARA TODOS
+      // Si las votaciones están cerradas → mostrar resultados
       if (!info.open) {
-        console.log('🔒 Votaciones cerradas, mostrando resultados...');
-        console.log('Pasando a showResults - info:', info);
-        console.log('Pasando a showResults - user:', user);
-        console.log('Pasando a showResults - candidatos:', candidatos);
-        await showResults(candidatos);
+        await showResults(candidatos, info);
         return;
       }
 
-      // 4. Verificar si está habilitado (existe en voters)
+      // 🔥 LECTURA 2: Verificar si está habilitado
       const emailSanitized = user.email.replace(/[@.]/g, '_');
-      try {
-        const voterSnap = await getDoc(doc(db, 'elections', electionId, 'voters', emailSanitized));
-        if (!voterSnap.exists()) {
-          show('notAllowedBox');
-          document.getElementById('rejectedEmail').textContent = user.email;
-          return;
-        }
-        voterData = voterSnap.data();
-      } catch (error) {
-        console.error('Error al verificar votante:', error);
+      const voterSnap = await getDoc(doc(db, 'elections', electionId, 'voters', emailSanitized));
+      if (!voterSnap.exists()) {
         show('notAllowedBox');
         document.getElementById('rejectedEmail').textContent = user.email;
         return;
       }
+      voterData = voterSnap.data();
 
-      // 5. ¿Ya votó?
-      try {
-        const votoSnap = await getDoc(doc(db, 'elections', electionId, 'votes', emailSanitized));
-        if (votoSnap.exists()) {
-          votoGuardado = votoSnap.data();
-          await mostrarYaVoto(votoGuardado, user.email);
-          return;
-        }
-      } catch (error) {
-        console.log('Verificación directa falló, intentando método alternativo...');
-        try {
-          const allVotesSnap = await getDocs(collection(db, 'elections', electionId, 'votes'));
-          let yaVoto = false;
-          allVotesSnap.forEach(docSnap => {
-            if (docSnap.id === emailSanitized) {
-              yaVoto = true;
-              votoGuardado = docSnap.data();
-            }
-          });
-          if (yaVoto) {
-            await mostrarYaVoto(votoGuardado, user.email);
-            return;
-          }
-        } catch (error2) {
-          console.log('Error en verificación alternativa:', error2);
-        }
+      // 🔥 LECTURA 3: ¿Ya votó?
+      const votoSnap = await getDoc(doc(db, 'elections', electionId, 'votes', emailSanitized));
+      if (votoSnap.exists()) {
+        votoGuardado = votoSnap.data();
+        await mostrarYaVoto(votoGuardado, user.email);
+        return;
       }
 
-      // 6. Mostrar candidatos
+      // Mostrar candidatos
       show('voteBox');
       if (user.email === 'alvaro.velez@cali.gov.co') {
         show('adminBox');
@@ -337,9 +331,16 @@
         Codigo_Verificacion: codigo
       };
 
+      // Guardar voto
       await setDoc(doc(db, 'elections', electionId, 'votes', emailSanitized), votoData);
+
+      // 🚀 ACTUALIZAR CONTADOR EN TIEMPO REAL (sin leer todos los votos)
+      await updateDoc(electionRef, {
+        totalVotos: increment(1),
+        [`resultados.${selectedId}`]: increment(1)
+      });
+
       votoGuardado = votoData;
-      
       await mostrarYaVoto(votoData, user.email);
 
     } catch (error) {
@@ -350,7 +351,7 @@
     }
   };
 
-  // ----------- MOSTRAR "YA VOTÓ" + CERTIFICADO CON NOMBRE Y CÉDULA -----------
+  // ----------- MOSTRAR "YA VOTÓ" -----------
   async function mostrarYaVoto(voto, email) {
     hide('voteBox'); 
     hide('adminBox'); 
@@ -358,19 +359,6 @@
     hide('notAllowedBox');
     hide('resultBox');
     show('yaVotoBox');
-
-    // Obtener datos del votante si no los tenemos
-    if (!voterData) {
-      const emailSanitized = email.replace(/[@.]/g, '_');
-      try {
-        const voterSnap = await getDoc(doc(db, 'elections', electionId, 'voters', emailSanitized));
-        if (voterSnap.exists()) {
-          voterData = voterSnap.data();
-        }
-      } catch (error) {
-        console.error('Error al obtener datos del votante:', error);
-      }
-    }
 
     const emailMostrar = voto.Email || voto.email || email;
     const fecha = voto.Fecha || voto.fecha || 'No disponible';
@@ -471,6 +459,12 @@
         await deleteDoc(votoDoc.ref);
         deleteCount++;
       }
+
+      // Resetear contadores
+      await updateDoc(electionRef, {
+        totalVotos: 0,
+        resultados: {}
+      });
       
       alert(`✅ Se eliminaron ${deleteCount} votos exitosamente. Recargando...`);
       location.reload();
@@ -481,167 +475,99 @@
     }
   };
 
-// ----------- MOSTRAR RESULTADOS -----------
-async function showResults(candidatos, user) {
-  hide('voteBox'); 
-  hide('adminBox'); 
-  hide('loginBox'); 
-  hide('notAllowedBox'); 
-  hide('yaVotoBox');
-  show('resultBox');
+  // ----------- MOSTRAR RESULTADOS (OPTIMIZADO) -----------
+  async function showResults(candidatos, info) {
+    hide('voteBox'); 
+    hide('adminBox'); 
+    hide('loginBox'); 
+    hide('notAllowedBox'); 
+    hide('yaVotoBox');
+    show('resultBox');
 
-  try {
-    const votesSnap = await getDocs(collection(db, 'elections', electionId, 'votes'));
-    const tally = {};
-    
-    // Inicializar contadores para cada candidato
-    Object.keys(candidatos).forEach(id => {
-      tally[id] = 0;
-    });
-
-    // Contar votos
-    votesSnap.forEach(d => {
-      const candidato = d.data().Candidato;
-      if (tally[candidato] !== undefined) {
-        tally[candidato]++;
-      }
-    });
-
-    const totalVotos = votesSnap.size;
-    const sorted = Object.entries(tally)
-      .map(([id, votos]) => ({
-        candidato: id,
-        nombre: candidatos[id].nombre || 'Sin nombre',
-        foto: candidatos[id].foto || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidatos[id].nombre || 'Usuario')}&size=250&background=667eea&color=fff`,
-        descripcion: candidatos[id].descripcion || '',
-        votos: votos,
-        porcentaje: totalVotos > 0 ? ((votos / totalVotos) * 100).toFixed(1) : 0
-      }))
-      .sort((a, b) => b.votos - a.votos);
-
-    const diferencia = sorted.length > 1 ? sorted[0].votos - sorted[1].votos : sorted[0]?.votos || 0;
-    
-    // Estadísticas
-    let statsHtml = `
-      <div class="col-md-6 mb-3">
-        <div class="stats-card">
-          <i class="bi bi-people-fill" style="font-size: 2rem; color: var(--institucional);"></i>
-          <div class="stats-number">${totalVotos}</div>
-          <div class="stats-label">Total Votos</div>
-        </div>
-      </div>
-      <div class="col-md-6 mb-3">
-        <div class="stats-card">
-          <i class="bi bi-person-check-fill" style="font-size: 2rem; color: var(--institucional);"></i>
-          <div class="stats-number">${sorted.length}</div>
-          <div class="stats-label">Candidatos</div>
-        </div>
-      </div>`;
-    
-    document.getElementById('statsContainer').innerHTML = statsHtml;
-
-    // Resultados detallados
-    let html = '<div class="card" style="padding: 40px;">' +
-      '<h3 class="text-center mb-4" style="color: var(--institucional);"><i class="bi bi-list-ol"></i> Resultados Detallados</h3>';
-
-    sorted.forEach((r, i) => {
-      html += `<div class="resultado-card${i < 4 ? ' ganador' : ''}">
-        <div class="d-flex align-items-center mb-3">
-          <img src="${r.foto}" style="width: 60px; height: 60px; border-radius: 50%; margin-right: 15px; border: 3px solid var(--institucional); object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(r.nombre)}&size=80&background=667eea&color=fff'">
-          <div class="flex-grow-1">
-            <h4 class="mb-0 text-primary">${r.nombre}</h4>
-            <div class="text-muted">${r.votos} votos</div>
-          </div>
-          <div style="font-size: 2rem; font-weight: bold; color: var(--institucional);">${r.porcentaje}%</div>
-        </div>
-        <div class="barra-progreso">
-          <div class="barra-fill" style="width: ${r.porcentaje}%">${r.porcentaje}%</div>
-        </div>
-      </div>`;
-    });
-
-    html += '</div>';
-    document.getElementById('resultadosContainer').innerHTML = html;
-
-    // Obtener firmas desde Firebase
-    let firmasHtml = `
-      <div class="card mt-4" style="padding: 40px;">
-        <h4 class="text-center mb-4" style="color: var(--institucional);">Organizadores del Proceso Electoral</h4>
-        <div class="row" id="firmasContainer">
-          <div class="col-12 text-center">
-            <div class="spinner-border text-primary" role="status">
-              <span class="visually-hidden">Cargando...</span>
-            </div>
-          </div>
-        </div>
-      </div>`;
-    document.getElementById('ganadorContainer').innerHTML = firmasHtml;
-
-    // Cargar firmas desde Firebase
     try {
-      const firmasSnap = await getDocs(collection(db, 'elections', electionId, 'firmas'));
-      let firmasData = [];
-      firmasSnap.forEach(doc => { 
-        firmasData.push(doc.data());
+      // 🚀 LEER SOLO 1 DOCUMENTO (info de elección) EN VEZ DE 1500 VOTOS
+      const totalVotos = info.totalVotos || 0;
+      const resultados = info.resultados || {};
+
+      // Construir array de resultados
+      const sorted = Object.entries(candidatos)
+        .map(([id, candidato]) => ({
+          candidato: id,
+          nombre: candidato.nombre || 'Sin nombre',
+          foto: candidato.foto || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidato.nombre || 'Usuario')}&size=250&background=667eea&color=fff`,
+          descripcion: candidato.descripcion || '',
+          votos: resultados[id] || 0,
+          porcentaje: totalVotos > 0 ? (((resultados[id] || 0) / totalVotos) * 100).toFixed(1) : 0
+        }))
+        .sort((a, b) => b.votos - a.votos);
+
+      // Estadísticas
+      let statsHtml = `
+        <div class="col-md-6 mb-3">
+          <div class="stats-card">
+            <i class="bi bi-people-fill" style="font-size: 2rem; color: var(--institucional);"></i>
+            <div class="stats-number">${totalVotos}</div>
+            <div class="stats-label">Total Votos</div>
+          </div>
+        </div>
+        <div class="col-md-6 mb-3">
+          <div class="stats-card">
+            <i class="bi bi-person-check-fill" style="font-size: 2rem; color: var(--institucional);"></i>
+            <div class="stats-number">${sorted.length}</div>
+            <div class="stats-label">Candidatos</div>
+          </div>
+        </div>`;
+      
+      document.getElementById('statsContainer').innerHTML = statsHtml;
+
+      // Resultados detallados
+      let html = '<div class="card" style="padding: 40px;">' +
+        '<h3 class="text-center mb-4" style="color: var(--institucional);"><i class="bi bi-list-ol"></i> Resultados Detallados</h3>';
+
+      sorted.forEach((r, i) => {
+        html += `<div class="resultado-card${i < 4 ? ' ganador' : ''}">
+          <div class="d-flex align-items-center mb-3">
+            <img src="${r.foto}" style="width: 60px; height: 60px; border-radius: 50%; margin-right: 15px; border: 3px solid var(--institucional); object-fit: cover;" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(r.nombre)}&size=80&background=667eea&color=fff'">
+            <div class="flex-grow-1">
+              <h4 class="mb-0 text-primary">${r.nombre}</h4>
+              <div class="text-muted">${r.votos} votos</div>
+            </div>
+            <div style="font-size: 2rem; font-weight: bold; color: var(--institucional);">${r.porcentaje}%</div>
+          </div>
+          <div class="barra-progreso">
+            <div class="barra-fill" style="width: ${r.porcentaje}%">${r.porcentaje}%</div>
+          </div>
+        </div>`;
       });
 
-      // Si hay firmas, mostrarlas
-      if (firmasData.length > 0) {
-        let firmasContentHtml = '';
-        firmasData.forEach((firma, index) => {  // ← Agregar ", index"
-          const imagen = firma.imagen || 'https://via.placeholder.com/200x80?text=Firma';
-          const nombre = firma.nombre || 'Nombre no disponible';
-          const cargo = firma.cargo || (index === 0 ? 'Profesional Especializado' : 'Directora');
-          
-          firmasContentHtml += `
-            <div class="col-md-6 text-center mb-4">
-              <img src="${imagen}" alt="Firma" style="max-width: 200px; margin-bottom: 15px;">
-              <h5 class="mb-1" style="color: var(--institucional);">${nombre}</h5>
-              <p class="mb-1"><strong>${cargo}</strong></p>
-              <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
-            </div>`;
-        });
-        document.getElementById('firmasContainer').innerHTML = firmasContentHtml;
-      } else {
-        // Si no hay firmas en Firebase, usar placeholders
-        document.getElementById('firmasContainer').innerHTML = `
-          <div class="col-md-6 text-center">
-            <img src="https://via.placeholder.com/200x80?text=Firma+1" alt="Firma 1" style="max-width: 200px; margin-bottom: 15px;">
-            <h5 class="mb-1" style="color: var(--institucional);">Karina Manzoni Flórez</h5>
-            <p class="mb-1"><strong>Subdirectora de Gestión Estratégica del Talento Humano</strong></p>
-            <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
-          </div>
-          <div class="col-md-6 text-center">
-            <img src="https://via.placeholder.com/200x80?text=Firma+2" alt="Firma 2" style="max-width: 200px; margin-bottom: 15px;">
-            <h5 class="mb-1" style="color: var(--institucional);">Laura Patricia Álvarez Gómez</h5>
-            <p class="mb-1"><strong>Directora de Departamento Administrativo</strong></p>
+      html += '</div>';
+      document.getElementById('resultadosContainer').innerHTML = html;
+
+      // ✅ USAR FIRMAS ESTÁTICAS (0 lecturas)
+      let firmasHtml = `
+        <div class="card mt-4" style="padding: 40px;">
+          <h4 class="text-center mb-4" style="color: var(--institucional);">Organizadores del Proceso Electoral</h4>
+          <div class="row">`;
+      
+      FIRMAS_ESTATICAS.forEach(firma => {
+        firmasHtml += `
+          <div class="col-md-6 text-center mb-4">
+            <img src="${firma.imagen}" alt="Firma" style="max-width: 200px; margin-bottom: 15px;">
+            <h5 class="mb-1" style="color: var(--institucional);">${firma.nombre}</h5>
+            <p class="mb-1"><strong>${firma.cargo}</strong></p>
             <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
           </div>`;
-      }
-    } catch (error) {
-      console.error('Error al cargar firmas:', error);
-      // Mostrar placeholders en caso de error
-      document.getElementById('firmasContainer').innerHTML = `
-        <div class="col-md-6 text-center">
-          <img src="https://via.placeholder.com/200x80?text=Firma+1" alt="Firma 1" style="max-width: 200px; margin-bottom: 15px;">
-          <h5 class="mb-1" style="color: var(--institucional);">Karina Manzoni Flórez</h5>
-          <p class="mb-1"><strong>Subdirectora de Gestión Estratégica del Talento Humano</strong></p>
-          <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
-        </div>
-        <div class="col-md-6 text-center">
-          <img src="https://via.placeholder.com/200x80?text=Firma+2" alt="Firma 2" style="max-width: 200px; margin-bottom: 15px;">
-          <h5 class="mb-1" style="color: var(--institucional);">Laura Patricia Álvarez Gómez</h5>
-          <p class="mb-1"><strong>Directora de Departamento Administrativo</strong></p>
-          <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
-        </div>`;
-    }
+      });
+      
+      firmasHtml += '</div></div>';
+      document.getElementById('ganadorContainer').innerHTML = firmasHtml;
 
-  } catch (error) {
-    console.error('Error al cargar resultados:', error);
-    document.getElementById('resultadosContainer').innerHTML = 
-      '<div class="alert alert-danger">Error al cargar resultados: ' + error.message + '</div>';
+    } catch (error) {
+      console.error('Error al cargar resultados:', error);
+      document.getElementById('resultadosContainer').innerHTML = 
+        '<div class="alert alert-danger">Error al cargar resultados: ' + error.message + '</div>';
+    }
   }
-}
 
   // ----------- DESCARGAS -----------
   window.descargarPNG = function() {
@@ -691,7 +617,6 @@ async function showResults(candidatos, user) {
 <!-- Librerías auxiliares -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </body>
 </html>
