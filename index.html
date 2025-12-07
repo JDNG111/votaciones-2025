@@ -63,14 +63,6 @@
         <button id="loginBtn" class="btn inst-button btn-lg">
           <i class="bi bi-google"></i> Entrar con Google
         </button>
-        <p class="text-muted mt-3 small">Inicia sesión para ejercer tu derecho al voto</p>
-      </div>
-
-      <!-- MENSAJE: VOTACIONES NO DISPONIBLES -->
-      <div id="votingClosedMessage" class="alert alert-info mt-4" style="display:none">
-        <i class="bi bi-info-circle-fill"></i>
-        <h5 class="mt-2">Acceso de Votación No Disponible</h5>
-        <p class="mb-0">El sistema de votación está cerrado en este momento.</p>
       </div>
 
       <!-- NO HABILITADO -->
@@ -368,9 +360,8 @@
     
     timerInterval = setInterval(() => {
       const newStatus = updateTimerDisplay(info);
-      // Si el estado cambió, recargar la página para actualizar UI
+      // Si el estado cambió, recargar la página
       if (newStatus !== status) {
-        console.log('Estado cambió de', status, 'a', newStatus, '- Recargando...');
         location.reload();
       }
     }, 1000);
@@ -397,40 +388,17 @@
   // ---------- AUTH STATE ----------
   onAuthStateChanged(auth, async user => {
     if (!user) { 
-      // Cargar temporizador y verificar estado sin login
+      // Cargar temporizador incluso sin login
       try {
         const snap = await getDoc(electionRef);
         if (snap.exists()) {
           electionInfo = snap.data();
           startTimer(electionInfo);
-          
-          // Determinar si mostrar login o resultados
-          const now = new Date().getTime();
-          const endTime = electionInfo.endTime ? new Date(electionInfo.endTime).getTime() : null;
-          const votingEnded = !electionInfo.open || (endTime && now >= endTime);
-          
-          if (votingEnded) {
-            // Mostrar resultados públicos sin login
-            await showResults(CANDIDATOS_ESTATICOS, electionInfo);
-            hide('loginBox');
-            hide('votingClosedMessage');
-          } else {
-            // Verificar si las votaciones están activas
-            if (isVotingAllowed(electionInfo)) {
-              show('loginBox');
-              hide('votingClosedMessage');
-            } else {
-              hide('loginBox');
-              show('votingClosedMessage');
-            }
-          }
-        } else {
-          show('loginBox');
         }
       } catch (e) {
         console.error('Error cargando info:', e);
-        show('loginBox');
       }
+      show('loginBox'); 
       return; 
     }
     
@@ -676,8 +644,17 @@
         Codigo_Verificacion: codigo
       };
 
-      // SOLO guardar el voto - Los contadores se actualizan automáticamente vía Cloud Function
       await setDoc(doc(db, 'elections', electionId, 'votes', emailSanitized), votoData);
+
+      try {
+        await updateDoc(electionRef, {
+          totalVotos: increment(1),
+          [`resultados.${selectedId}`]: increment(1)
+        });
+      } catch (counterError) {
+        console.error('Error al actualizar contadores:', counterError);
+        alert('⚠️ Tu voto fue registrado, pero hubo un problema actualizando los contadores.');
+      }
 
       votoGuardado = votoData;
       await mostrarYaVoto(votoData, user.email);
@@ -865,7 +842,6 @@
     hide('loginBox'); 
     hide('notAllowedBox'); 
     hide('yaVotoBox');
-    hide('votingClosedMessage');
     show('resultBox');
 
     try {
@@ -1016,3 +992,5 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </body>
 </html>
+
+
