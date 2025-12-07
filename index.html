@@ -440,11 +440,37 @@
       const candidatos = CANDIDATOS_ESTATICOS;
       const isAdmin = user.email === 'alvaro.velez@cali.gov.co';
 
-      // Si las votaciones están cerradas (manual o por tiempo)
-      if (!info.open || !isVotingAllowed(info)) {
+      // Determinar el estado de la votación
+      const now = new Date().getTime();
+      const startTime = info.startTime ? new Date(info.startTime).getTime() : null;
+      const endTime = info.endTime ? new Date(info.endTime).getTime() : null;
+      
+      const votingStatus = {
+        beforeStart: startTime && now < startTime,
+        active: isVotingAllowed(info) && info.open,
+        afterEnd: endTime && now >= endTime
+      };
+
+      // SOLO mostrar resultados si las votaciones terminaron (manual o por tiempo)
+      if (!info.open || votingStatus.afterEnd) {
         await showResults(candidatos, info);
         if (isAdmin) show('adminBox');
         return;
+      }
+
+      // Si está ANTES de empezar, no mostrar nada más (solo temporizador)
+      if (votingStatus.beforeStart) {
+        if (isAdmin) {
+          show('adminBox');
+          // Cargar horarios actuales
+          if (info.startTime) {
+            document.getElementById('startDateTime').value = new Date(info.startTime).toISOString().slice(0, 16);
+          }
+          if (info.endTime) {
+            document.getElementById('endDateTime').value = new Date(info.endTime).toISOString().slice(0, 16);
+          }
+        }
+        return; // No continuar con el flujo de votación
       }
 
       // Verificar si está habilitado
