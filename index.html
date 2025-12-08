@@ -226,6 +226,7 @@
   let voterData = null;
   let timerInterval = null;
   let electionInfo = null;
+  let electionListener = null;
 
   // ========== FUNCIONES DEL TEMPORIZADOR ==========
   function calculateTimeRemaining(targetDate) {
@@ -356,15 +357,45 @@
   function startTimer(info) {
     if (timerInterval) clearInterval(timerInterval);
     
-    const status = updateTimerDisplay(info);
+    updateTimerDisplay(info);
     
     timerInterval = setInterval(() => {
-      const newStatus = updateTimerDisplay(info);
-      // Si el estado cambió, recargar la página
-      if (newStatus !== status) {
-        location.reload();
-      }
+      updateTimerDisplay(info);
     }, 1000);
+  }
+
+  // LISTENER EN TIEMPO REAL (NO CONSUME LECTURAS EXTRA)
+  function startElectionListener() {
+    if (electionListener) return; // Ya está escuchando
+    
+    electionListener = onSnapshot(electionRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const newInfo = snapshot.data();
+        const now = new Date().getTime();
+        const endTime = newInfo.endTime ? new Date(newInfo.endTime).getTime() : null;
+        const timeExpired = endTime && now >= endTime;
+        
+        // Si cambió el estado de open o si el tiempo expiró y ahora está cerrado
+        if (electionInfo) {
+          const wasOpen = electionInfo.open;
+          const isNowClosed = !newInfo.open;
+          
+          // Recargar si:
+          // 1. El estado de open cambió
+          // 2. O si el tiempo expiró Y ahora está cerrado (ambas condiciones)
+          if (wasOpen !== newInfo.open || (timeExpired && isNowClosed && wasOpen)) {
+            console.log('Estado de votación cambió, recargando...');
+            location.reload();
+            return;
+          }
+        }
+        
+        electionInfo = newInfo;
+        startTimer(newInfo);
+      }
+    }, (error) => {
+      console.error('Error en listener:', error);
+    });
   }
 
   function isVotingAllowed(info) {
@@ -374,13 +405,14 @@
     const startTime = new Date(info.startTime).getTime();
     const endTime = new Date(info.endTime).getTime();
     
-    return now >= startTime && now < endTime;
+    return now >= startTime && now < endTime && info.open;
   }
 
   // ---------- LOGIN ----------
   document.getElementById('loginBtn').onclick = () => signInWithPopup(auth, provider);
 
   window.cerrarSesion = () => {
+    if (electionListener) electionListener(); // Detener listener
     signOut(auth);
     location.reload();
   };
@@ -388,12 +420,13 @@
   // ---------- AUTH STATE ----------
   onAuthStateChanged(auth, async user => {
     if (!user) { 
-      // Cargar temporizador incluso sin login
+      // Cargar temporizador e iniciar listener incluso sin login
       try {
         const snap = await getDoc(electionRef);
         if (snap.exists()) {
           electionInfo = snap.data();
           startTimer(electionInfo);
+          startElectionListener(); // Iniciar listener en tiempo real
         }
       } catch (e) {
         console.error('Error cargando info:', e);
@@ -434,8 +467,9 @@
       const info = snap.data();
       electionInfo = info;
       
-      // Iniciar temporizador
+      // Iniciar temporizador y listener
       startTimer(info);
+      startElectionListener();
 
       const candidatos = CANDIDATOS_ESTATICOS;
       const isAdmin = user.email === 'alvaro.velez@cali.gov.co';
@@ -445,18 +479,60 @@
       const startTime = info.startTime ? new Date(info.startTime).getTime() : null;
       const endTime = info.endTime ? new Date(info.endTime).getTime() : null;
       
-      const votingStatus = {
-        beforeStart: startTime && now < startTime,
-        active: isVotingAllowed(info) && info.open,
-        afterEnd: endTime && now >= endTime
-      };
-
-      // SOLO mostrar resultados si las votaciones terminaron (manual o por tiempo)
-      if (!info.open || votingStatus.afterEnd) {
+      const timeExpired = endTime && now >= endTime;
+      const manualyClosed = !info.open;
+      
+      // SOLO mostrar resultados si AMBAS condiciones se cumplen:
+      // 1. El tiempo expiró según el reloj
+      // 2. El estado en Firebase es open: false
+      if (timeExpired && manualyClosed) {
         await showResults(candidatos, info);
         if (isAdmin) show('adminBox');
         return;
       }
+      
+      // Si el tiempo expiró pero open sigue en true, mostrar mensaje especial
+      if (timeExpired && !manualyClosed) {
+        hide('voteBox');
+        hide('yaVotoBox');
+        hide('notAllowedBox');
+        hide('resultBox');
+        
+        const alertHtml = `
+          <div class="alert alert-warning mt-4">
+            <i class="bi bi-hourglass-bottom fs-1"></i>
+            <h3 class="mt-3">Votación Finalizada por Tiempo</h3>
+            <p>El periodo de votación ha concluido.</p>
+            <p class="mb-0"><strong>Los resultados estarán disponibles una vez el administrador cierre oficialmente el proceso.</strong></p>
+          </div>`;
+        
+        document.getElementById('timerBox').insertAdjacentHTML('afterend', alertHtml);
+        
+        if (isAdmin) {
+          show('adminBox');
+          const adminAlert = `
+            <div class="alert alert-info mt-3">
+              <i class="bi bi-info-circle-fill"></i>
+              <strong>Acción requerida:</strong> Cierra manualmente las votaciones para publicar los resultados oficiales.
+            </div>`;
+          document.getElementById('adminBox').insertAdjacentHTML('afterbegin', adminAlert);
+          
+          // Cargar horarios actuales
+          if (info.startTime) {
+            document.getElementById('startDateTime').value = new Date(info.startTime).toISOString().slice(0, 16);
+          }
+          if (info.endTime) {
+            document.getElementById('endDateTime').value = new Date(info.endTime).toISOString().slice(0, 16);
+          }
+        }
+        return;
+      }
+      
+      const votingStatus = {
+        beforeStart: startTime && now < startTime,
+        active: isVotingAllowed(info),
+        afterEnd: timeExpired
+      };
 
       // Si está ANTES de empezar, no mostrar nada más (solo temporizador)
       if (votingStatus.beforeStart) {
@@ -492,7 +568,7 @@
       }
       voterData = voterSnap.data();
 
-      // ¿Ya votó?
+    // ¿Ya votó?
       let votoSnap;
       try {
         votoSnap = await getDoc(doc(db, 'elections', electionId, 'votes', emailSanitized));
@@ -503,6 +579,7 @@
       if (votoSnap && votoSnap.exists()) {
         votoGuardado = votoSnap.data();
         await mostrarYaVoto(votoGuardado, user.email);
+        if (isAdmin) show('adminBox');
         return;
       }
 
@@ -670,7 +747,6 @@
   // ----------- MOSTRAR "YA VOTÓ" -----------
   async function mostrarYaVoto(voto, email) {
     hide('voteBox'); 
-    hide('adminBox'); 
     hide('loginBox'); 
     hide('notAllowedBox');
     hide('resultBox');
@@ -992,5 +1068,3 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </body>
 </html>
-
-
