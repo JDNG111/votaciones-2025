@@ -835,7 +835,7 @@
     }
   };
 
-  // ----------- CERRAR VOTACIONES -----------
+// ----------- CERRAR VOTACIONES -----------
   document.getElementById('closeBtn').onclick = async () => {
     if (!confirm('¿Cerrar las votaciones manualmente?')) return;
     
@@ -844,17 +844,29 @@
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Cerrando...';
     
     try {
+      // Detener el listener para evitar recarga prematura
+      if (electionListener) {
+        electionListener();
+        electionListener = null;
+      }
+      
       await updateDoc(electionRef, { open: false });
-      alert('Votaciones cerradas exitosamente. Recargando...');
-      location.reload();
+      alert('✅ Votaciones cerradas exitosamente. Recargando...');
+      
+      // Esperar un momento antes de recargar
+      setTimeout(() => {
+        location.reload();
+      }, 500);
     } catch (e) {
       alert('Error: ' + e.message);
       btn.disabled = false;
       btn.innerHTML = '<i class="bi bi-lock-fill"></i> Cerrar votaciones';
+      // Reiniciar listener si hubo error
+      startElectionListener();
     }
   };
 
-  // ----------- ABRIR VOTACIONES -----------
+// ----------- ABRIR VOTACIONES -----------
   document.getElementById('openBtn').onclick = async () => {
     if (!confirm('¿Abrir las votaciones manualmente?')) return;
     
@@ -863,13 +875,25 @@
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Abriendo...';
     
     try {
+      // Detener el listener para evitar recarga prematura
+      if (electionListener) {
+        electionListener();
+        electionListener = null;
+      }
+      
       await updateDoc(electionRef, { open: true });
-      alert('Votaciones abiertas exitosamente. Recargando...');
-      location.reload();
+      alert('✅ Votaciones abiertas exitosamente. Recargando...');
+      
+      // Esperar un momento antes de recargar
+      setTimeout(() => {
+        location.reload();
+      }, 500);
     } catch (e) {
       alert('Error: ' + e.message);
       btn.disabled = false;
       btn.innerHTML = '<i class="bi bi-unlock-fill"></i> Abrir votaciones';
+      // Reiniciar listener si hubo error
+      startElectionListener();
     }
   };
 
