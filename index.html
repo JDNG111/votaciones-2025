@@ -30,7 +30,31 @@
     .stats-number { font-size: 3rem; font-weight: bold; color: var(--institucional); line-height: 1; margin: 10px 0; }
     .stats-label { color: #666; font-size: 1rem; text-transform: uppercase; letter-spacing: 1px; }
     .dashboard-header { background: white; color: var(--institucional); padding: 40px; border-radius: 15px; margin-bottom: 30px; text-align: center; border: 3px solid var(--institucional); box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
-    footer { text-align: center; padding: 20px 0; color: #666; font-size: 0.85rem; margin-top: 50px; }
+    footer { 
+  text-align: center; 
+  padding: 30px 20px; 
+  background: linear-gradient(135deg, var(--institucional) 0%, #001f6b 100%);
+  color: #ffffff; 
+  font-size: 0.9rem; 
+  margin-top: 50px;
+  box-shadow: 0 -5px 20px rgba(0,0,0,0.15);
+  position: relative;
+}
+
+footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #ffc107, #ff6b35, #667eea);
+}
+
+footer p {
+  margin: 0;
+  font-weight: 500;
+}
     
     /* ESTILOS DEL TEMPORIZADOR */
     .timer-container { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; border-radius: 20px; margin: 30px 0; box-shadow: 0 10px 40px rgba(102, 126, 234, 0.4); }
