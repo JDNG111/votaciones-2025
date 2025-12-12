@@ -24,7 +24,7 @@
     .resultado-card { background: white; border-radius: 15px; padding: 20px; margin-bottom: 15px; }
     .resultado-card.ganador { background: linear-gradient(135deg, #fff3cd 0%, #fffbea 100%); border: 3px solid #ffc107; }
     .barra-progreso { height: 40px; border-radius: 20px; background: #e9ecef; overflow: hidden; margin-top: 10px; }
-    .barra-fill { height: 100%; background: linear-gradient(90deg, var(--institucional), var(--institucional)); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1); }
+    .barra-fill { height: 100%; background: linear-gradient(90deg, #0033a0, #5c7dbf); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1); }
     .cuenta-badge { background: linear-gradient(135deg, #28a745, #20c997); color: white; padding: 15px 25px; border-radius: 50px; display: inline-block; margin: 20px 0; box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4); }
     .stats-card { background: white; border-radius: 15px; padding: 25px; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.1); margin-bottom: 20px; }
     .stats-number { font-size: 3rem; font-weight: bold; color: var(--institucional); line-height: 1; margin: 10px 0; }
@@ -1062,7 +1062,7 @@ footer p {
       const sorted = Object.entries(candidatos)
         .map(([id, candidato]) => ({
           candidato: id,
-          nombre: candidato.nombre || 'Sin nombre',
+          nombre: candidato.nombre || 'Voto en Blanco',
           foto: candidato.foto || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidato.nombre || 'Usuario')}&size=250&background=667eea&color=fff`,
           descripcion: candidato.descripcion || '',
           votos: resultados[id] || 0,
