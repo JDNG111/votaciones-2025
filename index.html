@@ -272,9 +272,10 @@ footer p {
       descripcion: 'Secretaría de Salud'
     },
     'Candidato 10': {
-      nombre: '',
+      nombre: 'VOTO EN BLANCO',
       foto: 'https://raw.githubusercontent.com/JDNG111/votaciones-2025/refs/heads/main/posicion10.png',
-      descripcion: ''
+      descripcion: '',
+      ocultarNombre: true 
     }
   };
 
@@ -766,7 +767,7 @@ footer p {
      <div class="candidato-numero">${candidatoNumero}</div>
      <img src="${foto}" class="img-fluid" style="height:300px;object-fit:cover;width:100%;" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&size=250&background=667eea&color=fff'">
            <div class="p-3 text-center">
-             <h5 class="fw-bold mb-1" style="color: #0033a0;">${nombre}</h5>
+             ${!candidato.ocultarNombre ? `<h5 class="fw-bold mb-1" style="color: #0033a0;">${nombre}</h5>` : ''}
              ${descripcion ? `<p class="small mb-0" style="color: #0033a0;">${descripcion}</p>` : ''}
            </div>
          </div>`;
