@@ -731,7 +731,7 @@
   box.innerHTML = '';
   let candidatoNumero = 1;
   Object.entries(candidatos).forEach(([id, candidato]) => {
-      const nombre = candidato.nombre || 'Sin nombre';
+      const nombre = candidato.nombre || '';
       const foto = candidato.foto || `https://ui-avatars.com/api/?name=${encodeURIComponent(nombre)}&size=250&background=667eea&color=fff`;
       const descripcion = candidato.descripcion || '';
       
