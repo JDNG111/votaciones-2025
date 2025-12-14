@@ -120,22 +120,6 @@ footer p {
       return false;
     }
   });
-
-  // Detectar si las DevTools están abiertas (método avanzado)
-  (function() {
-    var devtools = /./;
-    devtools.toString = function() {
-      this.opened = true;
-    }
-    console.log('%c', devtools);
-    
-    setInterval(function() {
-      if (devtools.opened) {
-        window.location.reload();
-      }
-      devtools.opened = false;
-    }, 1000);
-  })();
 </script>
   
 <body>
