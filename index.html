@@ -1163,7 +1163,17 @@ footer p {
       FIRMAS_ESTATICAS.forEach(firma => {
         firmasHtml += `
           <div class="col-md-6 text-center mb-4">
-            <img src="${firma.imagen}" alt="Firma" style="max-width: 200px; margin-bottom: 15px;">
+            <div style="
+    border: 2px dashed var(--institucional);
+    border-radius: 8px;
+    padding: 12px;
+    display: inline-block;
+    margin-bottom: 15px;
+    color: var(--institucional);
+    font-weight: 600;
+  ">
+    Firmado electrónicamente
+  </div>
             <h5 class="mb-1" style="color: var(--institucional);">${firma.nombre}</h5>
             <p class="mb-1"><strong>${firma.cargo}</strong></p>
             <p class="text-muted small mb-0">Departamento Administrativo de Desarrollo e Innovación Institucional</p>
